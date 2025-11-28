@@ -1,7 +1,7 @@
 'use client';
 
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Logo } from '@/components/logo';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/firebase';
@@ -67,16 +67,16 @@ export default function VerifyEmailPage() {
           </div>
           <CardTitle className="text-2xl">Verify Your Email</CardTitle>
           <CardDescription>
-            We&apos;ve sent a verification link to <strong>{email}</strong>. Please check your inbox and click the link to activate your account.
+            We've sent a verification link to <strong>{email}</strong>. Please check your inbox and click the link to activate your account.
           </CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4">
           <p className="text-sm text-muted-foreground">
-            Once you&apos;ve verified, you can log in to your account.
+            Once you've verified, you can log in to your account.
           </p>
-          <Button onClick={checkEmailVerified}>I&apos;ve Verified My Email</Button>
+          <Button onClick={checkEmailVerified}>I've Verified My Email</Button>
           <div className="text-sm text-muted-foreground">
-            Didn&apos;t receive the email?{' '}
+            Didn't receive the email?{' '}
             <Button variant="link" className="p-0 h-auto" onClick={handleResendEmail}>
               Resend verification email
             </Button>
