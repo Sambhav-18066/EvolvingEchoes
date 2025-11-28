@@ -42,12 +42,12 @@ export default function SignupPage() {
         }
     }, [user, isUserLoading, router]);
 
-    const createUserProfile = (user: User) => {
+    const createUserProfile = (user: User, name?: string | null) => {
         if (!db) return;
         const userRef = doc(db, 'users', user.uid);
         const userData = {
             id: user.uid,
-            name: fullName || user.displayName,
+            name: name || user.displayName,
             email: user.email,
             phoneNumber: user.phoneNumber,
         };
@@ -59,8 +59,8 @@ export default function SignupPage() {
         const provider = new GoogleAuthProvider();
         try {
           const result = await signInWithPopup(auth, provider);
-          createUserProfile(result.user);
-          // useEffect will handle the redirect to /home since Google users are always verified
+          // Pass the display name from the Google result directly
+          createUserProfile(result.user, result.user.displayName);
         } catch (error: any) {
           toast({
             variant: "destructive",
@@ -100,13 +100,17 @@ export default function SignupPage() {
     const handleEmailSignUp = async () => {
         if (!auth) return;
         if (!validatePassword(password)) return;
+        if (!fullName.trim()) {
+            toast({ variant: "destructive", title: "Sign-Up Failed", description: "Please enter your full name." });
+            return;
+        }
 
         try {
             const result = await createUserWithEmailAndPassword(auth, email, password);
             await sendEmailVerification(result.user);
-            createUserProfile(result.user);
+            // Pass the full name from the form input
+            createUserProfile(result.user, fullName);
             
-            // Sign the user out immediately so they have to log in after verifying
             await signOut(auth);
             
             router.push(`/verify-email?email=${email}`);

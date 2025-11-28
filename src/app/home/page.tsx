@@ -25,7 +25,7 @@ export default function HomePage() {
   const { data: userProfile, isLoading: isProfileLoading } = useDoc(userProfileRef);
 
   const isLoading = isUserLoading || isProfileLoading;
-  const userName = userProfile?.name?.split(' ')[0] || 'User';
+  const userName = userProfile?.name?.split(' ')[0] || '';
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -37,7 +37,7 @@ export default function HomePage() {
             <CardContent className="relative z-10 flex flex-col items-center">
               <Avatar className="w-24 h-24 mb-4 border-4 border-background shadow-lg">
                 {userAvatar && <AvatarImage src={userAvatar.imageUrl} alt={userProfile?.name} data-ai-hint={userAvatar.imageHint} />}
-                <AvatarFallback>{userName.charAt(0)}</AvatarFallback>
+                <AvatarFallback>{userName ? userName.charAt(0) : ''}</AvatarFallback>
               </Avatar>
               {isLoading ? (
                 <Skeleton className="h-9 w-48 mt-2" />
