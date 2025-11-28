@@ -43,8 +43,6 @@ export default function ConversationPage() {
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef<any>(null);
   const { toast } = useToast();
-  const finalTranscriptRef = useRef('');
-  const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleSendMessage = useCallback(async (text: string) => {
     if (!text.trim()) return;
@@ -60,13 +58,11 @@ export default function ConversationPage() {
       timestamp: Date.now(),
     };
 
-    const newMessages = [...messages, userMessage];
-    setMessages(newMessages);
+    setMessages(prev => [...prev, userMessage]);
     setInput("");
-    finalTranscriptRef.current = '';
     setIsTyping(true);
 
-    const userMessagesCount = newMessages.filter(m => m.speaker === 'user').length;
+    const userMessagesCount = messages.filter(m => m.speaker === 'user').length + 1;
     
     try {
       const aiResult = await generateConversationalResponse({ userInput: text, mode });
@@ -125,11 +121,12 @@ export default function ConversationPage() {
   
    useEffect(() => {
     if (!SpeechRecognition) {
-      console.warn("Speech recognition not supported in this browser.");
       return;
     }
 
-    const recognition = new SpeechRecognition();
+    recognitionRef.current = new SpeechRecognition();
+    const recognition = recognitionRef.current;
+    
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
@@ -140,15 +137,10 @@ export default function ConversationPage() {
 
     recognition.onend = () => {
       setIsRecording(false);
-      const finalTranscript = finalTranscriptRef.current.trim();
-      if (finalTranscript) {
-          handleSendMessage(finalTranscript);
-      }
     };
     
     recognition.onerror = (event: any) => {
       if (event.error === 'no-speech' || event.error === 'aborted') {
-        // These are not critical errors, so we can ignore them.
         return;
       }
       console.error("Speech recognition error", event.error);
@@ -160,44 +152,26 @@ export default function ConversationPage() {
     };
 
     recognition.onresult = (event: any) => {
-      if (speechTimeoutRef.current) {
-        clearTimeout(speechTimeoutRef.current);
-      }
-
       let interim_transcript = '';
-      finalTranscriptRef.current = '';
+      let final_transcript = '';
+
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
-          finalTranscriptRef.current += event.results[i][0].transcript;
+          final_transcript += event.results[i][0].transcript;
         } else {
           interim_transcript += event.results[i][0].transcript;
         }
       }
       
-      setInput(finalTranscriptRef.current + interim_transcript);
-
-      speechTimeoutRef.current = setTimeout(() => {
-        if (recognitionRef.current) {
-            recognitionRef.current.stop();
-        }
-      }, 2000); 
+      setInput(final_transcript + interim_transcript);
     };
-
-    recognitionRef.current = recognition;
 
     return () => {
       if (recognitionRef.current) {
-        recognitionRef.current.onstart = null;
-        recognitionRef.current.onend = null;
-        recognitionRef.current.onerror = null;
-        recognitionRef.current.onresult = null;
         recognitionRef.current.stop();
       }
-      if (speechTimeoutRef.current) {
-        clearTimeout(speechTimeoutRef.current);
-      }
     };
-  }, [toast, handleSendMessage]);
+  }, [toast]);
 
 
   const toggleRecording = () => {
@@ -211,11 +185,9 @@ export default function ConversationPage() {
     }
 
     if (isRecording) {
-      if (speechTimeoutRef.current) clearTimeout(speechTimeoutRef.current);
       recognitionRef.current.stop();
     } else {
       try {
-        finalTranscriptRef.current = '';
         setInput('');
         recognitionRef.current.start();
       } catch (e) {
@@ -264,10 +236,12 @@ export default function ConversationPage() {
                   <MessageBubble key={message.id} message={message} />
                 ))}
                 {isTyping && <TypingIndicator />}
-                {showReflectiveWindow && (
-                    <ReflectiveWindow onClose={() => setShowReflectiveWindow(false)} />
-                )}
               </div>
+               {showReflectiveWindow && (
+                  <div className="w-full flex justify-center py-4">
+                    <ReflectiveWindow onClose={() => setShowReflectiveWindow(false)} />
+                  </div>
+                )}
             </ScrollArea>
             <div className="p-4 border-t bg-card">
              <div className="max-w-4xl mx-auto w-full">
