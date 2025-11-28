@@ -10,8 +10,9 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useUser, setDocumentNonBlocking } from "@/firebase";
 import { doc, getFirestore } from 'firebase/firestore';
-import { GoogleAuthProvider, signInWithPopup, RecaptchaVerifier, signInWithPhoneNumber, ConfirmationResult, User } from "firebase/auth";
+import { GoogleAuthProvider, signInWithPopup, createUserWithEmailAndPassword, User } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
     <svg viewBox="0 0 48 48" {...props}>
@@ -24,10 +25,9 @@ const GoogleIcon = (props: React.SVGProps<SVGSVGElement>) => (
 
 export default function SignupPage() {
     const [fullName, setFullName] = useState("");
-    const [phoneNumber, setPhoneNumber] = useState("");
-    const [otp, setOtp] = useState("");
-    const [confirmationResult, setConfirmationResult] = useState<ConfirmationResult | null>(null);
-    const [otpSent, setOtpSent] = useState(false);
+    const [email, setEmail] = useState("");
+    const [password, setPassword] = useState("");
+    const [passwordError, setPasswordError] = useState<string | null>(null);
 
     const auth = useAuth();
     const { user, isUserLoading } = useUser();
@@ -40,13 +40,6 @@ export default function SignupPage() {
             router.push("/home");
         }
     }, [user, isUserLoading, router]);
-
-    useEffect(() => {
-        if (!auth) return;
-        window.recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-          'size': 'invisible',
-        });
-    }, [auth]);
 
     const createUserProfile = (user: User) => {
         const userRef = doc(db, 'users', user.uid);
@@ -74,38 +67,46 @@ export default function SignupPage() {
           });
         }
     };
-
-    const handlePhoneSignUp = async () => {
-        if (!auth) return;
-        try {
-            const verifier = window.recaptchaVerifier;
-            const result = await signInWithPhoneNumber(auth, phoneNumber, verifier);
-            setConfirmationResult(result);
-            setOtpSent(true);
-            toast({
-                title: "OTP Sent",
-                description: "An OTP has been sent to your phone number.",
-            });
-        } catch (error: any) {
-            console.error(error);
-            toast({
-                variant: "destructive",
-                title: "Failed to send OTP",
-                description: error.message,
-            });
-        }
-    };
     
-    const handleOtpVerifyAndSignUp = async () => {
-        if (!confirmationResult) return;
+    const validatePassword = (password: string) => {
+        const errors = [];
+        if (!/(?=.*[a-z])/.test(password)) {
+            errors.push("a lowercase character");
+        }
+        if (!/(?=.*[A-Z])/.test(password)) {
+            errors.push("an uppercase character");
+        }
+        if (!/(?=.*\d)/.test(password)) {
+            errors.push("a numeric character");
+        }
+        if (!/(?=.*[\W_])/.test(password)) {
+            errors.push("a special character");
+        }
+        if (password.length < 8) {
+            errors.push("at least 8 characters");
+        }
+
+        if (errors.length > 0) {
+            setPasswordError(`Password must contain ${errors.join(', ')}.`);
+            return false;
+        }
+        
+        setPasswordError(null);
+        return true;
+    }
+
+    const handleEmailSignUp = async () => {
+        if (!auth) return;
+        if (!validatePassword(password)) return;
+
         try {
-            const result = await confirmationResult.confirm(otp);
+            const result = await createUserWithEmailAndPassword(auth, email, password);
             createUserProfile(result.user);
             router.push('/home');
         } catch (error: any) {
             toast({
                 variant: "destructive",
-                title: "OTP Verification Failed",
+                title: "Sign-Up Failed",
                 description: error.message,
             });
         }
@@ -113,7 +114,6 @@ export default function SignupPage() {
 
   return (
     <div className="flex min-h-screen flex-col items-center justify-center bg-background px-4 py-12">
-        <div id="recaptcha-container"></div>
         <div className="absolute top-8">
             <Logo />
         </div>
@@ -136,25 +136,31 @@ export default function SignupPage() {
                     </div>
                 </div>
 
-                {!otpSent ? (
-                    <>
-                        <div className="grid gap-2">
-                            <Label htmlFor="full-name">Full Name</Label>
-                            <Input id="full-name" placeholder="Sambhav" required value={fullName} onChange={(e) => setFullName(e.target.value)} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label htmlFor="phone">Phone Number</Label>
-                            <Input id="phone" type="tel" placeholder="+1 123 456 7890" required value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} />
-                        </div>
-                        <Button onClick={handlePhoneSignUp} className="w-full mt-2">Send OTP</Button>
-                    </>
-                ) : (
-                    <div className="grid gap-2">
-                        <Label htmlFor="otp">Enter OTP</Label>
-                        <Input id="otp" type="text" placeholder="123456" required value={otp} onChange={(e) => setOtp(e.target.value)} />
-                        <Button onClick={handleOtpVerifyAndSignUp} className="w-full mt-2">Verify OTP & Sign Up</Button>
-                    </div>
+                <div className="grid gap-2">
+                    <Label htmlFor="full-name">Full Name</Label>
+                    <Input id="full-name" placeholder="Sambhav" required value={fullName} onChange={(e) => setFullName(e.target.value)} />
+                </div>
+                <div className="grid gap-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input id="email" type="email" placeholder="m@example.com" required value={email} onChange={(e) => setEmail(e.target.value)} />
+                </div>
+                <div className="grid gap-2">
+                    <Label htmlFor="password">Password</Label>
+                    <Input id="password" type="password" required value={password} onChange={(e) => {
+                        setPassword(e.target.value);
+                        validatePassword(e.target.value);
+                    }} />
+                </div>
+
+                {passwordError && (
+                    <Alert variant="destructive">
+                        <AlertDescription>
+                            {passwordError}
+                        </AlertDescription>
+                    </Alert>
                 )}
+
+                <Button onClick={handleEmailSignUp} className="w-full mt-2">Sign Up</Button>
             </CardContent>
             <CardFooter className="flex flex-col gap-4">
                 <div className="text-center text-sm">
