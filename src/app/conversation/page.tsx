@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Header } from "@/components/header";
@@ -138,11 +139,7 @@ export default function ConversationPage() {
         aiResponse.audioUrl = audioResult.audio;
       } catch (audioError) {
         console.error("Error generating audio:", audioError);
-        toast({
-            variant: "destructive",
-            title: "Audio Error",
-            description: "Could not generate audio for the AI response.",
-        });
+        // Fail silently if audio generation fails, e.g. due to rate limits
       }
       
       setMessages(prev => [...prev, aiResponse]);
