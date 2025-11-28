@@ -19,7 +19,7 @@ import { generateConversationalResponse } from "@/ai/flows/generate-conversation
 import { generateReflection } from "@/ai/flows/generate-reflection";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { useUser, useFirestore, useMemoFirebase } from "@/firebase";
+import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from "@/firebase";
 import { doc, getDoc, updateDoc, increment, arrayUnion } from "firebase/firestore";
 
 const aiAvatar = PlaceHolderImages.find(p => p.id === 'ai-avatar-1');
@@ -84,21 +84,20 @@ export default function ConversationPage() {
 
   const updateStats = useCallback(async () => {
     if (!user || !db) return;
-
+  
     const sessionDurationSeconds = (Date.now() - sessionStartTime.current) / 1000;
     const sessionDurationMinutes = Math.floor(sessionDurationSeconds / 60);
-
+  
     const userProfileRef = doc(db, "users", user.uid);
-
+  
     try {
       const userProfileSnap = await getDoc(userProfileRef);
       const currentStats = userProfileSnap.data()?.stats || {};
-
-      const newAvgLength = ( (currentStats.averageSessionLength?.minutes || 0) * (currentStats.sessions?.total || 0) + sessionDurationMinutes) / ((currentStats.sessions?.total || 0) + 1);
-
+  
+      const newAvgLength = ((currentStats.averageSessionLength?.minutes || 0) * (currentStats.sessions?.total || 0) + sessionDurationMinutes) / ((currentStats.sessions?.total || 0) + 1);
+  
       const uniqueWords = new Set(messages.filter(m => m.speaker === 'user').map(m => m.text).join(' ').split(/\s+/)).size;
-
-
+  
       const updatePayload = {
         'stats.sessions.total': increment(1),
         'stats.averageSessionLength.minutes': Math.floor(newAvgLength),
@@ -108,10 +107,26 @@ export default function ConversationPage() {
           uniqueWords: uniqueWords,
         }),
       };
-
-      await updateDoc(userProfileRef, updatePayload, { merge: true });
-    } catch (error) {
-      console.error("Error updating user stats:", error);
+  
+      // Use non-blocking update with proper error handling
+      updateDoc(userProfileRef, updatePayload, { merge: true })
+        .catch(async (serverError) => {
+          const permissionError = new FirestorePermissionError({
+            path: userProfileRef.path,
+            operation: 'update',
+            requestResourceData: updatePayload,
+          });
+          errorEmitter.emit('permission-error', permissionError);
+        });
+  
+    } catch (error: any) {
+      // This will catch errors from getDoc, but not from the non-blocking updateDoc
+      console.error("Error fetching user profile for stats update:", error);
+       const permissionError = new FirestorePermissionError({
+          path: userProfileRef.path,
+          operation: 'get',
+      });
+      errorEmitter.emit('permission-error', permissionError);
     }
   }, [user, db, messages]);
 
