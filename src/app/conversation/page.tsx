@@ -265,12 +265,12 @@ export default function ConversationPage() {
                   <MessageBubble key={message.id} message={message} />
                 ))}
                 {isTyping && <TypingIndicator />}
+              </div>
                 {showReflectiveWindow && (
                   <div className="flex justify-center">
                       <ReflectiveWindow onClose={() => setShowReflectiveWindow(false)} />
                   </div>
                 )}
-              </div>
             </ScrollArea>
             <div className="p-4 border-t bg-card">
              <div className="max-w-4xl mx-auto w-full">
