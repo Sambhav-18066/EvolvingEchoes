@@ -1,3 +1,4 @@
+
 'use client';
 
 import { Button } from '@/components/ui/button';
@@ -5,7 +6,6 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Logo } from '@/components/logo';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { useAuth } from '@/firebase';
-import { sendEmailVerification } from 'firebase/auth';
 import { useToast } from '@/hooks/use-toast';
 import { MailCheck } from 'lucide-react';
 import Link from 'next/link';
@@ -17,42 +17,11 @@ export default function VerifyEmailPage() {
   const { toast } = useToast();
   const router = useRouter();
 
-  const handleResendEmail = async () => {
-    if (auth && auth.currentUser) {
-      try {
-        await sendEmailVerification(auth.currentUser);
-        toast({
-          title: 'Verification Email Sent',
-          description: `A new verification email has been sent to ${email}.`,
-        });
-      } catch (error: any) {
-        toast({
-          variant: 'destructive',
-          title: 'Failed to Resend Email',
-          description: error.message,
-        });
-      }
-    } else {
-      toast({
-        variant: 'destructive',
-        title: 'Error',
-        description: 'No active user session found. Please try signing up again.',
-      });
-    }
-  };
+  // This function is no longer needed as we direct the user to log in.
+  // The login page will handle the check.
 
-  const checkEmailVerified = async () => {
-    if (auth && auth.currentUser) {
-        await auth.currentUser.reload();
-        if (auth.currentUser.emailVerified) {
-            router.push('/home');
-        } else {
-            toast({
-                title: "Email Not Verified",
-                description: "Please check your inbox and click the verification link.",
-            });
-        }
-    }
+  const handleProceedToLogin = () => {
+    router.push('/login');
   };
 
   return (
@@ -74,12 +43,12 @@ export default function VerifyEmailPage() {
           <p className="text-sm text-muted-foreground">
             Once you've verified, you can log in to your account.
           </p>
-          <Button onClick={checkEmailVerified}>I've Verified My Email</Button>
+          <Button onClick={handleProceedToLogin}>Proceed to Log In</Button>
           <div className="text-sm text-muted-foreground">
-            Didn't receive the email?{' '}
-            <Button variant="link" className="p-0 h-auto" onClick={handleResendEmail}>
-              Resend verification email
-            </Button>
+            {/* The resend functionality is not straightforward without a signed-in user,
+                so we will guide them to try logging in, which can also trigger a resend flow.
+            */}
+            Didn't receive the email? Check your spam folder or try signing in again to resend.
           </div>
         </CardContent>
         <CardFooter>
