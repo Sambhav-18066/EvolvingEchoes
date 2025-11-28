@@ -49,7 +49,6 @@ export default function ConversationPage() {
   
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef<any>(null);
-  const stopByUser = useRef(false);
   const { toast } = useToast();
 
   // Refs to track session stats
@@ -90,51 +89,43 @@ export default function ConversationPage() {
   
     const userProfileRef = doc(db, "users", user.uid);
   
-    try {
-      // Ensure the document exists before trying to update it.
-      // This creates the doc with default stats if it's the user's first session.
-      const initialStats = {
-        stats: {
-          sessions: { total: 0, change: 0 },
-          averageSessionLength: { minutes: 0, seconds: 0, change: 0 },
-          journalEntries: { total: 0, change: 0 },
-          confidence: 75,
-          fluency: [],
-          lexicalRichness: [],
-        }
-      };
-      setDocumentNonBlocking(userProfileRef, initialStats, { merge: true });
-  
-      const uniqueWords = new Set(messages.filter(m => m.speaker === 'user').map(m => m.text).join(' ').split(/\s+/).filter(Boolean)).size;
-  
-      const updatePayload = {
-        'stats.sessions.total': increment(1),
-        'stats.averageSessionLength.minutes': increment(sessionDurationMinutes),
-        'stats.lexicalRichness': arrayUnion({
-          date: new Date().toISOString().split('T')[0],
-          uniqueWords: uniqueWords,
-        }),
-      };
-  
-      // Now, perform the update on the (now guaranteed to exist) document
-      updateDoc(userProfileRef, updatePayload)
-        .catch(async (serverError) => {
-          const permissionError = new FirestorePermissionError({
-            path: userProfileRef.path,
-            operation: 'update',
-            requestResourceData: updatePayload,
-          });
-          errorEmitter.emit('permission-error', permissionError);
-        });
-  
-    } catch (error: any) {
-       console.error("Error setting up stats update:", error);
-       const permissionError = new FirestorePermissionError({
+    // This creates the doc with default stats if it's the user's first session.
+    // CRITICAL: We MUST include the `id` field here to satisfy the `create` security rule.
+    const initialDocData = {
+      id: user.uid, // This is required by the security rule for creation
+      stats: {
+        sessions: { total: 0, change: 0 },
+        averageSessionLength: { minutes: 0, seconds: 0, change: 0 },
+        journalEntries: { total: 0, change: 0 },
+        confidence: 75,
+        fluency: [],
+        lexicalRichness: [],
+      }
+    };
+    setDocumentNonBlocking(userProfileRef, initialDocData, { merge: true });
+
+    // Now, prepare the update payload. This only contains the fields we want to change.
+    const uniqueWords = new Set(messages.filter(m => m.speaker === 'user').map(m => m.text).join(' ').split(/\s+/).filter(Boolean)).size;
+
+    const updatePayload = {
+      'stats.sessions.total': increment(1),
+      'stats.averageSessionLength.minutes': increment(sessionDurationMinutes),
+      'stats.lexicalRichness': arrayUnion({
+        date: new Date().toISOString().split('T')[0],
+        uniqueWords: uniqueWords,
+      }),
+    };
+
+    // Perform the update. This will now run on a document that is guaranteed to exist.
+    updateDoc(userProfileRef, updatePayload)
+      .catch(async (serverError) => {
+        const permissionError = new FirestorePermissionError({
           path: userProfileRef.path,
-          operation: 'write',
+          operation: 'update',
+          requestResourceData: updatePayload,
+        });
+        errorEmitter.emit('permission-error', permissionError);
       });
-      errorEmitter.emit('permission-error', permissionError);
-    }
   }, [user, db, messages]);
 
 
@@ -149,7 +140,7 @@ export default function ConversationPage() {
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, messages.length]);
+  }, [user, messages.length > 1]);
 
 
   const handleSendMessage = useCallback(async (text: string) => {
@@ -262,7 +253,6 @@ export default function ConversationPage() {
 
     recognition.onstart = () => {
       setIsRecording(true);
-      stopByUser.current = false;
     };
 
     recognition.onend = () => {
@@ -293,9 +283,7 @@ export default function ConversationPage() {
           interimTranscript += event.results[i][0].transcript;
         }
       }
-      // Set the input to the most recent stable (final) transcript,
-      // with the ongoing (interim) transcript appended.
-      setInput(finalTranscript.trim() + interimTranscript);
+      setInput(finalTranscript + interimTranscript);
     };
 
     return () => {
@@ -320,7 +308,6 @@ export default function ConversationPage() {
     }
 
     if (isRecording) {
-      stopByUser.current = true;
       recognitionRef.current.stop();
     } else {
       try {
@@ -483,7 +470,5 @@ const ReflectiveWindow = ({ reflection, onClose }: { reflection: string, onClose
         </Card>
     </div>
 );
-
-    
 
     
