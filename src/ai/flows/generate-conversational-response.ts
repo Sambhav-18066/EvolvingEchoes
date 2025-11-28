@@ -13,7 +13,7 @@ import {z} from 'genkit';
 import {InteractionMode} from '@/lib/types';
 
 const GenerateConversationalResponseInputSchema = z.object({
-  userInput: z.string().describe('The user\'s message.'),
+  userInput: z.string().describe("The user's message."),
   mode: z.nativeEnum(InteractionMode).describe('The current conversation mode.'),
 });
 export type GenerateConversationalResponseInput = z.infer<
@@ -21,7 +21,7 @@ export type GenerateConversationalResponseInput = z.infer<
 >;
 
 const GenerateConversationalResponseOutputSchema = z.object({
-  response: z.string().describe('The AI\'s response.'),
+  response: z.string().describe("The AI's response."),
   mood: z.enum(['calm', 'curious', 'supportive']).describe('The mood of the AI response.'),
 });
 export type GenerateConversationalResponseOutput = z.infer<

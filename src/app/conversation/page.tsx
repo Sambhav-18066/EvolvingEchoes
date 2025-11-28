@@ -20,15 +20,15 @@ import { generateConversationalResponse } from "@/ai/flows/generate-conversation
 const aiAvatar = PlaceHolderImages.find(p => p.id === 'ai-avatar-1');
 const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar-1');
 
-const modeDetails: Record<InteractionMode, { name: string; icon: React.ReactNode }> = {
-  'agentic': { name: 'Agentic AI Mode', icon: <Sparkles className="w-4 h-4" /> },
-  'non-agentic': { name: 'Non-Agentic AI Mode', icon: <BrainCircuit className="w-4 h-4" /> },
-  'peer': { name: 'Peer Mode', icon: <Users className="w-4 h-4" /> }
+const modeDetails: Record<string, { name: string; icon: React.ReactNode }> = {
+  [InteractionMode.AGENTIC]: { name: 'Agentic AI Mode', icon: <Sparkles className="w-4 h-4" /> },
+  [InteractionMode.NON_AGENTIC]: { name: 'Non-Agentic AI Mode', icon: <BrainCircuit className="w-4 h-4" /> },
+  [InteractionMode.PEER]: { name: 'Peer Mode', icon: <Users className="w-4 h-4" /> }
 };
 
 export default function ConversationPage() {
   const searchParams = useSearchParams();
-  const mode = (searchParams.get("mode") as InteractionMode) || "agentic";
+  const mode = (searchParams.get("mode") as InteractionMode) || InteractionMode.AGENTIC;
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");

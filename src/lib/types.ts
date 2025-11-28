@@ -1,3 +1,4 @@
+
 export type Message = {
   id: string;
   text: string;
@@ -19,4 +20,8 @@ export type UserProfile = {
   goals: string;
 };
 
-export type InteractionMode = 'agentic' | 'non-agentic' | 'peer';
+export enum InteractionMode {
+  AGENTIC = 'agentic',
+  NON_AGENTIC = 'non-agentic',
+  PEER = 'peer',
+}
