@@ -9,13 +9,13 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { InteractionMode, Message } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { BrainCircuit, Mic, Send, Sparkles, Users, User, ArrowDown } from "lucide-react";
+import { BrainCircuit, Mic, Send, Sparkles, Users } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import React, { useState, useEffect, useRef } from "react";
-import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { generateConversationalResponse } from "@/ai/flows/generate-conversational-response";
+import { Badge } from "@/components/ui/badge";
 
 const aiAvatar = PlaceHolderImages.find(p => p.id === 'ai-avatar-1');
 const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar-1');
@@ -71,7 +71,8 @@ export default function ConversationPage() {
     setInput("");
     setIsTyping(true);
 
-    if (messages.length > 0 && (messages.length + 1) % 6 === 0) {
+    const userMessagesCount = [...messages, userMessage].filter(m => m.speaker === 'user').length;
+    if (userMessagesCount > 0 && userMessagesCount % 5 === 0) {
         setShowReflectiveWindow(true);
     } else {
         setShowReflectiveWindow(false);
@@ -105,9 +106,8 @@ export default function ConversationPage() {
   return (
     <div className="flex flex-col h-screen bg-background">
       <Header isLoggedIn={true} />
-      <div className="flex-1 flex pt-20 overflow-hidden">
-        <main className="flex-1 flex flex-col p-4 gap-4">
-          <div className="flex items-center justify-between p-2 rounded-lg bg-card border">
+      <main className="flex-1 flex flex-col pt-20 overflow-hidden p-4 gap-4">
+          <div className="flex items-center justify-between p-2 rounded-lg bg-card border flex-shrink-0">
              <div className="flex items-center gap-3">
                <Avatar className="h-10 w-10 relative">
                  {aiAvatar && <AvatarImage src={aiAvatar.imageUrl} data-ai-hint={aiAvatar.imageHint} />}
@@ -128,7 +128,7 @@ export default function ConversationPage() {
                 <Link href="/modes">Change Mode</Link>
              </Button>
           </div>
-          <Card className="flex-1 flex flex-col">
+          <Card className="flex-1 flex flex-col overflow-hidden">
             <ScrollArea className="flex-1 p-6" viewportRef={viewportRef}>
               <div className="space-y-6">
                 {messages.map((message) => (
@@ -171,7 +171,6 @@ export default function ConversationPage() {
             </div>
           </Card>
         </main>
-      </div>
     </div>
   );
 }
