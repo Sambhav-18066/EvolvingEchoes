@@ -45,6 +45,7 @@ export default function ConversationPage() {
   const { toast } = useToast();
   const transcriptRef = useRef('');
   const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const stopByUser = useRef(false);
 
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -52,6 +53,7 @@ export default function ConversationPage() {
     if (!text.trim()) return;
 
     if (recognitionRef.current && isRecording) {
+      stopByUser.current = true;
       recognitionRef.current.stop();
     }
     
@@ -138,14 +140,17 @@ export default function ConversationPage() {
 
     recognition.onstart = () => {
       setIsRecording(true);
+      stopByUser.current = false;
     };
 
     recognition.onend = () => {
       setIsRecording(false);
-      // The 'end' event can be triggered by stop() or by the API itself.
-      // We only want to auto-send if the API stops it after a pause,
-      // not when we programmatically call stop().
-      if (transcriptRef.current.trim()) {
+      if (speechTimeoutRef.current) {
+        clearTimeout(speechTimeoutRef.current);
+      }
+      
+      // Send message automatically only if recording wasn't stopped by the user clicking the button
+      if (!stopByUser.current && transcriptRef.current.trim()) {
         handleSendMessage(transcriptRef.current.trim());
       }
     };
@@ -219,6 +224,7 @@ export default function ConversationPage() {
     }
 
     if (isRecording) {
+      stopByUser.current = true;
       recognitionRef.current.stop();
     } else {
       try {
