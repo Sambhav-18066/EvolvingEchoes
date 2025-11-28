@@ -10,7 +10,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useUser, setDocumentNonBlocking } from "@/firebase";
 import { doc, getFirestore } from 'firebase/firestore';
-import { GoogleAuthProvider, signInWithPopup, createUserWithEmailAndPassword, User, sendEmailVerification } from "firebase/auth";
+import { GoogleAuthProvider, signInWithPopup, createUserWithEmailAndPassword, User, sendEmailVerification, signOut } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -42,10 +42,11 @@ export default function SignupPage() {
     }, [user, isUserLoading, router]);
 
     const createUserProfile = (user: User) => {
+        if (!db) return;
         const userRef = doc(db, 'users', user.uid);
         const userData = {
             id: user.uid,
-            name: user.displayName || fullName,
+            name: fullName || user.displayName,
             email: user.email,
             phoneNumber: user.phoneNumber,
         };
@@ -58,7 +59,7 @@ export default function SignupPage() {
         try {
           const result = await signInWithPopup(auth, provider);
           createUserProfile(result.user);
-          router.push('/home');
+          // useEffect will handle the redirect to /home since Google users are always verified
         } catch (error: any) {
           toast({
             variant: "destructive",
@@ -103,7 +104,12 @@ export default function SignupPage() {
             const result = await createUserWithEmailAndPassword(auth, email, password);
             await sendEmailVerification(result.user);
             createUserProfile(result.user);
+            
+            // Sign the user out immediately so they have to log in after verifying
+            await signOut(auth);
+            
             router.push(`/verify-email?email=${email}`);
+
         } catch (error: any) {
             toast({
                 variant: "destructive",
@@ -149,7 +155,11 @@ export default function SignupPage() {
                     <Label htmlFor="password">Password</Label>
                     <Input id="password" type="password" required value={password} onChange={(e) => {
                         setPassword(e.target.value);
-                        validatePassword(e.target.value);
+                        if (e.target.value) {
+                            validatePassword(e.target.value);
+                        } else {
+                            setPasswordError(null);
+                        }
                     }} />
                 </div>
 

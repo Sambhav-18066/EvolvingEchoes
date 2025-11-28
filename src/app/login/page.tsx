@@ -9,7 +9,7 @@ import { Logo } from "@/components/logo";
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useUser } from "@/firebase";
-import { GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, sendEmailVerification, signOut } from "firebase/auth";
+import { GoogleAuthProvider, signInWithPopup, signInWithEmailAndPassword, sendEmailVerification, signOut, User } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -26,6 +26,7 @@ export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [verificationMessage, setVerificationMessage] = useState<string | null>(null);
+  const [unverifiedUser, setUnverifiedUser] = useState<User | null>(null);
   const auth = useAuth();
   const { user, isUserLoading } = useUser();
   const router = useRouter();
@@ -42,8 +43,7 @@ export default function LoginPage() {
     const provider = new GoogleAuthProvider();
     try {
       await signInWithPopup(auth, provider);
-      // Google sign-in automatically handles verified emails
-      router.push('/home');
+      // This will trigger the useEffect to redirect to /home, as Google sign-in users are always verified.
     } catch (error: any) {
       toast({
         variant: "destructive",
@@ -55,12 +55,14 @@ export default function LoginPage() {
 
   const handleEmailSignIn = async () => {
     if (!auth) return;
+    setVerificationMessage(null);
+    setUnverifiedUser(null);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       if (userCredential.user.emailVerified) {
-        setVerificationMessage(null);
-        router.push('/home');
+        // Successful login, useEffect will handle redirect
       } else {
+        setUnverifiedUser(userCredential.user);
         setVerificationMessage("Your email has not been verified. Please check your inbox for a verification link.");
         // Sign the user out so they can't navigate to other pages
         await signOut(auth);
@@ -75,29 +77,26 @@ export default function LoginPage() {
   };
 
   const resendVerificationEmail = async () => {
-    // Since we signed the user out, they need to sign in again to get a user object to send email
-     if (!auth) return;
-    try {
-      const userCredential = await signInWithEmailAndPassword(auth, email, password);
-      if (userCredential.user && !userCredential.user.emailVerified) {
-        await sendEmailVerification(userCredential.user);
+    if (!unverifiedUser) {
         toast({
-          title: "Verification Email Sent",
-          description: "A new verification email has been sent to your address.",
+            variant: "destructive",
+            title: "Could Not Resend Email",
+            description: "No user information found. Please try signing in again first.",
         });
-        setVerificationMessage("A new verification link has been sent. Please check your inbox.");
-        await signOut(auth); // Sign out again after sending
-      } else {
-         toast({
-          title: "Email Already Verified",
-          description: "This email is already verified. You can log in.",
-        });
-      }
+        return;
+    };
+    try {
+      await sendEmailVerification(unverifiedUser);
+      toast({
+        title: "Verification Email Sent",
+        description: "A new verification email has been sent to your address.",
+      });
+      setVerificationMessage("A new verification link has been sent. Please check your inbox.");
     } catch (error: any) {
         toast({
             variant: "destructive",
             title: "Could Not Resend Email",
-            description: "Please ensure your email and password are correct to resend the verification link.",
+            description: "There was an error sending the verification email. Please try again.",
         });
     }
   };
