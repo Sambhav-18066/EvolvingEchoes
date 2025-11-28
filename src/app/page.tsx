@@ -20,7 +20,7 @@ export default function LandingPage() {
             Evolving Echoes helps you explore your personal identity through guided conversations with a supportive AI partner.
           </p>
           <div className="mt-10 flex gap-4">
-            <Link href="/home">
+            <Link href="/login">
               <Button size="lg" className="text-lg px-8 py-6 rounded-full shadow-lg shadow-primary/20">
                 Get Started
                 <Zap className="ml-2 h-5 w-5" />
