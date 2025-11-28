@@ -1,0 +1,94 @@
+{
+  "entities": {
+    "UserProfile": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "UserProfile",
+      "type": "object",
+      "description": "Represents a user profile in the application.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the UserProfile entity."
+        },
+        "name": {
+          "type": "string",
+          "description": "User's full name."
+        },
+        "age": {
+          "type": "number",
+          "description": "User's age."
+        },
+        "email": {
+          "type": "string",
+          "description": "User's email address.",
+          "format": "email"
+        },
+        "phoneNumber": {
+          "type": "string",
+          "description": "User's phone number."
+        },
+        "englishProficiency": {
+          "type": "string",
+          "description": "User's English proficiency level."
+        },
+        "academicLevel": {
+          "type": "string",
+          "description": "User's academic level."
+        },
+        "goals": {
+          "type": "string",
+          "description": "User's learning goals."
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "age",
+        "email"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/users/{userId}",
+        "definition": {
+          "entityName": "UserProfile",
+          "schema": {
+            "$ref": "#/backend/entities/UserProfile"
+          },
+          "description": "Collection of user profiles, secured by user ID. This top level User collection is an anti-pattern, since it allows listing all users. It is here to avoid a breaking change to the original requested structure. Consider moving the profiles to /user_profiles/{userId}.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user, matching Firebase Auth UID."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/users/{userId}/profile",
+        "definition": {
+          "entityName": "UserProfile",
+          "schema": {
+            "$ref": "#/backend/entities/UserProfile"
+          },
+          "description": "User profile, stored as a document under the user's ID. Allows reading a specific user profile without listing all users.",
+          "params": [
+            {
+              "name": "userId",
+              "description": "The unique identifier for the user, matching Firebase Auth UID."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure is designed to support the 'Evolving Echoes' application, focusing on user authentication, personalized profiles, AI chat interactions, and progress tracking. To achieve Authorization Independence and meet QAPs, the design incorporates the following strategies:\n\n1.  **Path-Based Ownership:** User profiles and conversation logs are stored under the `/users/{userId}` path, establishing clear ownership and simplifying security rules based on `request.auth.uid`.\n2.  **Denormalization (for future collaborative features):** If collaborative features are added later (e.g., shared reflection journals), membership maps (`members: {uid1: 'role', uid2: 'role'}`) will be denormalized into relevant documents to avoid `get()` calls in security rules and enable atomic operations.\n3.  **Structural Segregation:** All documents within a collection share the same security requirements, avoiding mixed access needs. For example, user profiles and conversation logs are separated under their respective user IDs.\n\nThis structure supports QAPs by:\n\n*   Enabling secure `list` operations under the `/users/{userId}` path, as all documents in these subcollections are owned by the authenticated user.\n*   Facilitating clear and debuggable security rules based solely on the `request.auth.uid` and the document path, without requiring complex hierarchical checks."
+  }
+}
