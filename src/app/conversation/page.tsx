@@ -1,6 +1,7 @@
 
 "use client";
 
+import React, { Suspense } from 'react';
 import { Header } from "@/components/header";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -13,14 +14,17 @@ import { cn } from "@/lib/utils";
 import { BrainCircuit, Mic, Send, Sparkles, Users, MicOff, Volume2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { generateConversationalResponse } from "@/ai/flows/generate-conversational-response";
 import { generateReflection } from "@/ai/flows/generate-reflection";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { useUser, useFirestore, errorEmitter, FirestorePermissionError, setDocumentNonBlocking } from "@/firebase";
-import { doc, updateDoc, increment, arrayUnion } from "firebase/firestore";
+import { useUser, useFirestore, errorEmitter } from "@/firebase";
+import { doc, updateDoc, increment, arrayUnion, setDoc } from "firebase/firestore";
+import { FirestorePermissionError } from '@/firebase/errors';
+import { setDocumentNonBlocking } from '@/firebase/non-blocking-updates';
+import { Skeleton } from '@/components/ui/skeleton';
 
 const aiAvatar = PlaceHolderImages.find(p => p.id === 'ai-avatar-1');
 const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar-1');
@@ -34,7 +38,7 @@ const modeDetails: Record<string, { name: string; icon: React.ReactNode, initial
 // @ts-ignore
 const SpeechRecognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
 
-export default function ConversationPage() {
+function ConversationView() {
   const searchParams = useSearchParams();
   const mode = (searchParams.get("mode") as InteractionMode) || InteractionMode.AGENTIC;
   const { user } = useUser();
@@ -51,26 +55,22 @@ export default function ConversationPage() {
   const recognitionRef = useRef<any>(null);
   const { toast } = useToast();
 
-  // Refs to track session stats
   const sessionStartTime = useRef(Date.now());
-  const userWordCount = useRef(0);
 
   const speak = useCallback((text: string) => {
     if (typeof window === 'undefined' || !window.speechSynthesis) {
       console.warn('Speech synthesis not supported by this browser.');
       return;
     }
-    window.speechSynthesis.cancel(); // Stop any previous speech
+    window.speechSynthesis.cancel();
     const utterance = new SpeechSynthesisUtterance(text);
     
-    // Find a female voice
     const voices = window.speechSynthesis.getVoices();
     const femaleVoice = voices.find(voice => voice.lang.startsWith('en') && (voice.name.includes('Female') || voice.name.includes('Samantha') || voice.name.includes('Google US English')));
     
     if (femaleVoice) {
       utterance.voice = femaleVoice;
     } else {
-        // Fallback if no specific female voice is found
         const defaultVoice = voices.find(voice => voice.lang.startsWith('en') && voice.default);
         if (defaultVoice) utterance.voice = defaultVoice;
     }
@@ -89,10 +89,8 @@ export default function ConversationPage() {
   
     const userProfileRef = doc(db, "users", user.uid);
   
-    // This creates the doc with default stats if it's the user's first session.
-    // CRITICAL: We MUST include the `id` field here to satisfy the `create` security rule.
     const initialDocData = {
-      id: user.uid, // This is required by the security rule for creation
+      id: user.uid,
       stats: {
         sessions: { total: 0, change: 0 },
         averageSessionLength: { minutes: 0, seconds: 0, change: 0 },
@@ -104,19 +102,18 @@ export default function ConversationPage() {
     };
     setDocumentNonBlocking(userProfileRef, initialDocData, { merge: true });
 
-    // Now, prepare the update payload. This only contains the fields we want to change.
     const uniqueWords = new Set(messages.filter(m => m.speaker === 'user').map(m => m.text).join(' ').split(/\s+/).filter(Boolean)).size;
 
     const updatePayload = {
       'stats.sessions.total': increment(1),
       'stats.averageSessionLength.minutes': increment(sessionDurationMinutes),
+      'stats.averageSessionLength.seconds': increment(sessionDurationSeconds % 60),
       'stats.lexicalRichness': arrayUnion({
         date: new Date().toISOString().split('T')[0],
         uniqueWords: uniqueWords,
       }),
     };
 
-    // Perform the update. This will now run on a document that is guaranteed to exist.
     updateDoc(userProfileRef, updatePayload)
       .catch(async (serverError) => {
         const permissionError = new FirestorePermissionError({
@@ -130,9 +127,8 @@ export default function ConversationPage() {
 
 
   useEffect(() => {
-    // This function will be called when the component unmounts
     return () => {
-      if (user && messages.length > 1) { // only update if there was an interaction
+      if (user && messages.length > 1) { 
         updateStats();
       }
       if (typeof window !== 'undefined' && window.speechSynthesis) {
@@ -146,9 +142,6 @@ export default function ConversationPage() {
   const handleSendMessage = useCallback(async (text: string) => {
     if (!text.trim()) return;
     
-    // Add words to word count
-    userWordCount.current += text.trim().split(/\s+/).length;
-
     const userMessage: Message = {
       id: Date.now().toString(),
       text: text,
@@ -206,9 +199,7 @@ export default function ConversationPage() {
   }
 
   useEffect(() => {
-    // Pre-load voices
     if (typeof window !== 'undefined' && window.speechSynthesis) {
-        // This is often necessary to get the full list of voices.
         const poller = setInterval(() => {
             const voices = window.speechSynthesis.getVoices();
             if (voices.length) {
@@ -226,7 +217,6 @@ export default function ConversationPage() {
     setMessages([initialMessage]);
     speak(initialMessage.text);
     sessionStartTime.current = Date.now();
-    userWordCount.current = 0;
   }, [mode, speak]);
 
   useEffect(() => {
@@ -257,12 +247,10 @@ export default function ConversationPage() {
 
     recognition.onend = () => {
         setIsRecording(false);
-        // Do not automatically send on end. User must click send.
     };
     
     recognition.onerror = (event: any) => {
       if (event.error === 'no-speech' || event.error === 'aborted') {
-        // These are normal occurrences, don't show a scary error.
         return;
       }
       console.error("Speech recognition error:", event.error);
@@ -408,6 +396,40 @@ export default function ConversationPage() {
   );
 }
 
+export default function ConversationPage() {
+  return (
+    <Suspense fallback={<ConversationSkeleton />}>
+      <ConversationView />
+    </Suspense>
+  )
+}
+
+const ConversationSkeleton = () => {
+  return (
+    <div className="flex flex-col h-screen bg-background">
+      <Header isLoggedIn={true} />
+      <main className="flex-1 flex flex-col pt-20 overflow-hidden">
+        <div className="flex-shrink-0 border-b p-4">
+           <Skeleton className="h-[76px] w-full rounded-lg" />
+        </div>
+        <div className="flex-1 flex flex-col overflow-hidden bg-muted/20 p-6">
+          <div className="space-y-6 max-w-4xl mx-auto w-full">
+            <div className="flex items-end gap-3 w-full mr-auto justify-start">
+              <Skeleton className="h-8 w-8 rounded-full" />
+              <Skeleton className="h-12 w-64 rounded-2xl" />
+            </div>
+          </div>
+        </div>
+        <div className="p-4 border-t bg-card">
+          <div className="max-w-4xl mx-auto w-full">
+            <Skeleton className="h-12 w-full rounded-full" />
+          </div>
+        </div>
+      </main>
+    </div>
+  )
+}
+
 const MessageBubble = ({ message, onPlayAudio }: { message: Message, onPlayAudio: (text: string) => void }) => {
   const isUser = message.speaker === 'user';
   return (
@@ -470,5 +492,3 @@ const ReflectiveWindow = ({ reflection, onClose }: { reflection: string, onClose
         </Card>
     </div>
 );
-
-    

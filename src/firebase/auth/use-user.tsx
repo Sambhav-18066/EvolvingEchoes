@@ -1,10 +1,11 @@
 
 'use client';
 import { useFirebase } from '@/firebase/provider';
+import type { User } from 'firebase/auth';
 
 // Return type for useUser() - specific to user auth state
 export interface UserHookResult { 
-  user: any | null; // Using 'any' to avoid circular dependency if User type from 'firebase/auth' is used here and in provider.
+  user: User | null;
   isUserLoading: boolean;
   userError: Error | null;
 }
