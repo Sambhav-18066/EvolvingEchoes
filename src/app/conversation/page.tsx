@@ -34,7 +34,7 @@ export default function ConversationPage() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [showReflectiveWindow, setShowReflectiveWindow] = useState(false);
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const viewportRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setMessages([{
@@ -47,9 +47,9 @@ export default function ConversationPage() {
   }, [mode]);
 
   useEffect(() => {
-    if (scrollAreaRef.current) {
-      scrollAreaRef.current.scrollTo({
-        top: scrollAreaRef.current.scrollHeight,
+    if (viewportRef.current) {
+      viewportRef.current.scrollTo({
+        top: viewportRef.current.scrollHeight,
         behavior: 'smooth'
       });
     }
@@ -127,7 +127,7 @@ export default function ConversationPage() {
              </Button>
           </div>
           <Card className="flex-1 flex flex-col relative">
-            <ScrollArea className="flex-1 p-6" ref={scrollAreaRef}>
+            <ScrollArea className="flex-1 p-6" viewportRef={viewportRef}>
               <div className="space-y-6">
                 {messages.map((message) => (
                   <MessageBubble key={message.id} message={message} />
