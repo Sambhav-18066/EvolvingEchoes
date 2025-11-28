@@ -149,9 +149,9 @@ export default function ConversationPage() {
         clearTimeout(speechTimeoutRef.current);
       }
       
-      // Send message automatically only if recording wasn't stopped by the user clicking the button
-      if (!stopByUser.current && transcriptRef.current.trim()) {
-        handleSendMessage(transcriptRef.current.trim());
+      const transcript = transcriptRef.current.trim();
+      if (!stopByUser.current && transcript) {
+        handleSendMessage(transcript);
       }
     };
     
@@ -184,15 +184,15 @@ export default function ConversationPage() {
         }
       }
       
-      transcriptRef.current = final_transcript;
+      transcriptRef.current = final_transcript || transcriptRef.current;
       setInput(transcriptRef.current + interim_transcript);
 
-      // Set a timeout to stop recognition if the user stops talking.
       speechTimeoutRef.current = setTimeout(() => {
-        if (isRecording) {
-            recognition.stop();
+        if (recognitionRef.current) {
+            stopByUser.current = false;
+            recognitionRef.current.stop();
         }
-      }, 2000); // 2 seconds of silence
+      }, 2000); 
     };
 
     recognitionRef.current = recognition;
@@ -210,7 +210,7 @@ export default function ConversationPage() {
       }
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [toast]);
+  }, [toast, handleSendMessage]);
 
 
   const toggleRecording = () => {
