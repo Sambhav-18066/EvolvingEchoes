@@ -53,7 +53,7 @@ export default function ConversationPage() {
         behavior: 'smooth'
       });
     }
-  }, [messages]);
+  }, [messages, isTyping, showReflectiveWindow]);
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,8 +71,10 @@ export default function ConversationPage() {
     setInput("");
     setIsTyping(true);
 
-    if (messages.length > 0 && messages.length % 5 === 0) {
-      setShowReflectiveWindow(true);
+    if (messages.length > 0 && (messages.length + 1) % 6 === 0) {
+        setShowReflectiveWindow(true);
+    } else {
+        setShowReflectiveWindow(false);
     }
     
     try {
@@ -126,16 +128,16 @@ export default function ConversationPage() {
                 <Link href="/modes">Change Mode</Link>
              </Button>
           </div>
-          <Card className="flex-1 flex flex-col relative">
+          <Card className="flex-1 flex flex-col">
             <ScrollArea className="flex-1 p-6" viewportRef={viewportRef}>
               <div className="space-y-6">
                 {messages.map((message) => (
                   <MessageBubble key={message.id} message={message} />
                 ))}
                 {isTyping && <TypingIndicator />}
+                {showReflectiveWindow && <ReflectiveWindow onClose={() => setShowReflectiveWindow(false)} />}
               </div>
             </ScrollArea>
-             {showReflectiveWindow && <ReflectiveWindow onClose={() => setShowReflectiveWindow(false)} />}
             <div className="p-4 border-t bg-card">
               <form onSubmit={handleSendMessage} className="flex items-end gap-2">
                 <Button variant="ghost" size="icon" className="flex-shrink-0">
@@ -215,8 +217,8 @@ const TypingIndicator = () => (
 );
 
 const ReflectiveWindow = ({ onClose }: { onClose: () => void }) => (
-    <div className="absolute inset-x-4 bottom-24 z-10 animate-in fade-in-50 slide-in-from-bottom-5 duration-500">
-        <Card className="shadow-2xl bg-gradient-to-br from-indigo-100 to-purple-100">
+    <div className="w-full animate-in fade-in-50 slide-in-from-bottom-5 duration-500 my-4">
+        <Card className="shadow-lg bg-gradient-to-br from-indigo-100 to-purple-100">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Sparkles className="text-accent" /> Reflective Window</CardTitle>
                 <CardDescription>A moment to pause and reflect on our conversation.</CardDescription>
