@@ -15,6 +15,7 @@ import { useSearchParams } from "next/navigation";
 import React, { useState, useEffect, useRef } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { generateConversationalResponse } from "@/ai/flows/generate-conversational-response";
 
 const aiAvatar = PlaceHolderImages.find(p => p.id === 'ai-avatar-1');
 const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar-1');
@@ -54,7 +55,7 @@ export default function ConversationPage() {
     }
   }, [messages]);
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!input.trim()) return;
 
@@ -66,25 +67,37 @@ export default function ConversationPage() {
     };
 
     setMessages(prev => [...prev, userMessage]);
+    const currentInput = input;
     setInput("");
     setIsTyping(true);
 
     if (messages.length > 0 && messages.length % 5 === 0) {
       setShowReflectiveWindow(true);
     }
-
-    // Mock AI response
-    setTimeout(() => {
+    
+    try {
+      const aiResult = await generateConversationalResponse({ userInput: currentInput, mode });
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
-        text: "That's a very interesting point. Could you tell me more about why you feel that way?",
+        text: aiResult.response,
         speaker: 'ai',
         timestamp: Date.now(),
-        mood: 'curious',
+        mood: aiResult.mood,
       };
       setMessages(prev => [...prev, aiResponse]);
+    } catch (error) {
+      console.error("Error generating AI response:", error);
+      const errorResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        text: "I'm sorry, I'm having trouble connecting. Please try again in a moment.",
+        speaker: 'ai',
+        timestamp: Date.now(),
+        mood: 'calm',
+      };
+      setMessages(prev => [...prev, errorResponse]);
+    } finally {
       setIsTyping(false);
-    }, 2000);
+    }
   };
 
   return (
@@ -105,7 +118,7 @@ export default function ConversationPage() {
                  <h2 className="font-semibold">{modeDetails[mode].name}</h2>
                  <p className="text-xs text-muted-foreground flex items-center gap-1">
                    <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                   AI is feeling calm
+                   AI is feeling {messages[messages.length-1]?.mood || 'calm'}
                  </p>
                </div>
              </div>
