@@ -18,6 +18,8 @@ import { generateConversationalResponse } from "@/ai/flows/generate-conversation
 import { generateReflection } from "@/ai/flows/generate-reflection";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useUser, useFirestore, useMemoFirebase } from "@/firebase";
+import { doc, getDoc, updateDoc, increment, arrayUnion } from "firebase/firestore";
 
 const aiAvatar = PlaceHolderImages.find(p => p.id === 'ai-avatar-1');
 const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar-1');
@@ -34,6 +36,8 @@ const SpeechRecognition = typeof window !== 'undefined' && (window.SpeechRecogni
 export default function ConversationPage() {
   const searchParams = useSearchParams();
   const mode = (searchParams.get("mode") as InteractionMode) || InteractionMode.AGENTIC;
+  const { user } = useUser();
+  const db = useFirestore();
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
@@ -47,9 +51,60 @@ export default function ConversationPage() {
   const stopByUser = useRef(false);
   const { toast } = useToast();
 
+  // Refs to track session stats
+  const sessionStartTime = useRef(Date.now());
+  const userWordCount = useRef(0);
+
+  const updateStats = useCallback(async () => {
+    if (!user || !db) return;
+
+    const sessionDurationSeconds = (Date.now() - sessionStartTime.current) / 1000;
+    const sessionDurationMinutes = Math.floor(sessionDurationSeconds / 60);
+    const sessionDurationRemainingSeconds = Math.round(sessionDurationSeconds % 60);
+
+    const userProfileRef = doc(db, "users", user.uid);
+
+    try {
+      const userProfileSnap = await getDoc(userProfileRef);
+      const currentStats = userProfileSnap.data()?.stats || {};
+
+      const newAvgLength = ( (currentStats.averageSessionLength?.minutes || 0) * (currentStats.sessions?.total || 0) + sessionDurationMinutes) / ((currentStats.sessions?.total || 0) + 1);
+
+      const uniqueWords = new Set(userWordCount.current).size;
+
+      const updatePayload = {
+        'stats.sessions.total': increment(1),
+        'stats.averageSessionLength.minutes': Math.floor(newAvgLength),
+        'stats.averageSessionLength.seconds': Math.round((newAvgLength * 60) % 60),
+        'stats.lexicalRichness': arrayUnion({
+          date: new Date().toISOString().split('T')[0],
+          uniqueWords: uniqueWords,
+        }),
+      };
+
+      await updateDoc(userProfileRef, updatePayload);
+    } catch (error) {
+      console.error("Error updating user stats:", error);
+    }
+  }, [user, db]);
+
+
+  useEffect(() => {
+    // This function will be called when the component unmounts
+    return () => {
+      if (user && messages.length > 1) { // only update if there was an interaction
+        updateStats();
+      }
+    };
+  }, [user, messages.length, updateStats]);
+
+
   const handleSendMessage = useCallback(async (text: string) => {
     if (!text.trim()) return;
     
+    // Add words to word count
+    userWordCount.current += text.trim().split(/\s+/).length;
+
     const userMessage: Message = {
       id: Date.now().toString(),
       text: text,
@@ -78,7 +133,7 @@ export default function ConversationPage() {
       setMessages(prev => [...prev, aiResponse]);
 
       if (userMessagesCount > 0 && userMessagesCount % 5 === 0) {
-        const reflectionResult = await generateReflection({ history });
+        const reflectionResult = await generateReflection({ history: history.concat([{speaker: 'ai', text: aiResult.response}]) });
         setReflectionText(reflectionResult.reflection);
         setShowReflectiveWindow(true);
       } else {
@@ -112,6 +167,8 @@ export default function ConversationPage() {
       timestamp: Date.now(),
       mood: 'calm',
     }]);
+    sessionStartTime.current = Date.now();
+    userWordCount.current = 0;
   }, [mode]);
 
   useEffect(() => {
@@ -141,12 +198,13 @@ export default function ConversationPage() {
       stopByUser.current = false;
     };
 
+    let finalTranscriptOnEnd = '';
     recognition.onend = () => {
-      setIsRecording(false);
-      if (!stopByUser.current) {
-        // If recognition stops unexpectedly, restart it.
-        setTimeout(() => recognition.start(), 100);
-      }
+        setIsRecording(false);
+        if (finalTranscriptOnEnd) {
+            handleSendMessage(finalTranscriptOnEnd);
+            finalTranscriptOnEnd = ''; // Reset after sending
+        }
     };
     
     recognition.onerror = (event: any) => {
@@ -161,18 +219,18 @@ export default function ConversationPage() {
       });
     };
     
-    let finalTranscript = '';
     recognition.onresult = (event: any) => {
       let interimTranscript = '';
-      finalTranscript = ''; // Reset final transcript to process full result set
-      for (let i = 0; i < event.results.length; ++i) {
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
           finalTranscript += event.results[i][0].transcript;
         } else {
           interimTranscript += event.results[i][0].transcript;
         }
       }
-      setInput(finalTranscript + interimTranscript);
+      setInput(interimTranscript);
+      finalTranscriptOnEnd = finalTranscript; // Store final transcript
     };
 
     return () => {
@@ -180,7 +238,7 @@ export default function ConversationPage() {
         recognitionRef.current.stop();
       }
     };
-  }, [toast]);
+  }, [toast, handleSendMessage]);
 
 
   const toggleRecording = () => {
