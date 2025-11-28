@@ -41,17 +41,14 @@
         }
       },
       "required": [
-        "id",
-        "name",
-        "age",
-        "email"
+        "id"
       ]
     }
   },
   "auth": {
     "providers": [
-      "password",
-      "anonymous"
+      "google.com",
+      "phone"
     ]
   },
   "firestore": {
