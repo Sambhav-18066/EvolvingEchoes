@@ -42,7 +42,7 @@ export default function ConversationPage() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(false);
+  const [isTyping, setIsTyping] = useState(isTyping);
   const [showReflectiveWindow, setShowReflectiveWindow] = useState(false);
   const [reflectionText, setReflectionText] = useState("");
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -251,12 +251,10 @@ export default function ConversationPage() {
       stopByUser.current = false;
     };
 
-    let finalTranscriptOnEnd = '';
     recognition.onend = () => {
         setIsRecording(false);
-        if (finalTranscriptOnEnd) {
-            handleSendMessage(finalTranscriptOnEnd);
-            finalTranscriptOnEnd = ''; // Reset after sending
+        if(!stopByUser.current){
+            handleSendMessage(input);
         }
     };
     
@@ -282,8 +280,7 @@ export default function ConversationPage() {
           interimTranscript += event.results[i][0].transcript;
         }
       }
-      setInput(interimTranscript);
-      finalTranscriptOnEnd = finalTranscript; // Store final transcript
+      setInput(finalTranscript.trim() || interimTranscript);
     };
 
     return () => {
@@ -294,7 +291,7 @@ export default function ConversationPage() {
         window.speechSynthesis.cancel();
       }
     };
-  }, [toast, handleSendMessage]);
+  }, [toast, handleSendMessage, input]);
 
 
   const toggleRecording = () => {
