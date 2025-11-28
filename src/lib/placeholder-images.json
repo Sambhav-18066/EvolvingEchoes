@@ -1,3 +1,34 @@
 {
-  "placeholderImages": []
+  "placeholderImages": [
+    {
+      "id": "user-avatar-1",
+      "description": "User profile picture",
+      "imageUrl": "https://images.unsplash.com/photo-1657331017197-061601b1de71?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxwcm9maWxlJTIwcGVyc29ufGVufDB8fHx8MTc2NDMwMzIyOXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "profile person"
+    },
+    {
+      "id": "ai-avatar-1",
+      "description": "AI assistant avatar with a soft, abstract look",
+      "imageUrl": "https://images.unsplash.com/photo-1669295384050-a1d4357bd1d7?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHw1fHxhYnN0cmFjdCUyMGdyYWRpZW50fGVufDB8fHx8MTc2NDI1OTUxNXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "abstract gradient"
+    },
+    {
+      "id": "mode-agentic",
+      "description": "Agentic AI Mode illustration",
+      "imageUrl": "https://images.unsplash.com/photo-1667415382888-0f16395c5b63?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxMHx8Z2FsYXh5JTIwbmVidWxhfGVufDB8fHx8MTc2NDI3NTA5Nnww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "galaxy nebula"
+    },
+    {
+      "id": "mode-non-agentic",
+      "description": "Non-Agentic AI Mode illustration",
+      "imageUrl": "https://images.unsplash.com/photo-1549791084-5f78368b208b?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwyfHxtaW5pbWFsJTIwYXJjaGl0ZWN0dXJlfGVufDB8fHx8MTc2NDM0NDY1OXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "minimal architecture"
+    },
+    {
+      "id": "mode-peer",
+      "description": "Peer Mode illustration",
+      "imageUrl": "https://images.unsplash.com/photo-1573497620053-ea5300f94f21?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3NDE5ODJ8MHwxfHNlYXJjaHwxfHxwZW9wbGUlMjB0YWxraW5nfGVufDB8fHx8MTc2NDM0NDY1OXww&ixlib=rb-4.1.0&q=80&w=1080",
+      "imageHint": "people talking"
+    }
+  ]
 }
