@@ -61,17 +61,18 @@ export default function ConversationPage() {
       console.warn('Speech synthesis not supported by this browser.');
       return;
     }
+    window.speechSynthesis.cancel(); // Stop any previous speech
     const utterance = new SpeechSynthesisUtterance(text);
     
     // Find a female voice
     const voices = window.speechSynthesis.getVoices();
-    const femaleVoice = voices.find(voice => voice.name.includes('Female') || voice.gender === 'female');
+    const femaleVoice = voices.find(voice => voice.lang.startsWith('en') && (voice.name.includes('Female') || voice.name.includes('Samantha') || voice.name.includes('Google US English')));
     
     if (femaleVoice) {
       utterance.voice = femaleVoice;
     } else {
         // Fallback if no specific female voice is found
-        const defaultVoice = voices.find(voice => voice.lang.startsWith('en'));
+        const defaultVoice = voices.find(voice => voice.lang.startsWith('en') && voice.default);
         if (defaultVoice) utterance.voice = defaultVoice;
     }
 
@@ -86,7 +87,6 @@ export default function ConversationPage() {
 
     const sessionDurationSeconds = (Date.now() - sessionStartTime.current) / 1000;
     const sessionDurationMinutes = Math.floor(sessionDurationSeconds / 60);
-    const sessionDurationRemainingSeconds = Math.round(sessionDurationSeconds % 60);
 
     const userProfileRef = doc(db, "users", user.uid);
 
@@ -96,7 +96,8 @@ export default function ConversationPage() {
 
       const newAvgLength = ( (currentStats.averageSessionLength?.minutes || 0) * (currentStats.sessions?.total || 0) + sessionDurationMinutes) / ((currentStats.sessions?.total || 0) + 1);
 
-      const uniqueWords = new Set(userWordCount.current).size;
+      const uniqueWords = new Set(messages.filter(m => m.speaker === 'user').map(m => m.text).join(' ').split(/\s+/)).size;
+
 
       const updatePayload = {
         'stats.sessions.total': increment(1),
@@ -108,11 +109,11 @@ export default function ConversationPage() {
         }),
       };
 
-      await updateDoc(userProfileRef, updatePayload);
+      await updateDoc(userProfileRef, updatePayload, { merge: true });
     } catch (error) {
       console.error("Error updating user stats:", error);
     }
-  }, [user, db]);
+  }, [user, db, messages]);
 
 
   useEffect(() => {
@@ -120,6 +121,9 @@ export default function ConversationPage() {
     return () => {
       if (user && messages.length > 1) { // only update if there was an interaction
         updateStats();
+      }
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
       }
     };
   }, [user, messages.length, updateStats]);
@@ -452,3 +456,5 @@ const ReflectiveWindow = ({ reflection, onClose }: { reflection: string, onClose
         </Card>
     </div>
 );
+
+    
