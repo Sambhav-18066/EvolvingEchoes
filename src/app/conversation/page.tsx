@@ -46,8 +46,6 @@ export default function ConversationPage() {
   const finalTranscriptRef = useRef('');
   const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  const formRef = useRef<HTMLFormElement>(null);
-
   const handleSendMessage = useCallback(async (text: string) => {
     if (!text.trim()) return;
 
@@ -167,6 +165,7 @@ export default function ConversationPage() {
       }
 
       let interim_transcript = '';
+      finalTranscriptRef.current = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
           finalTranscriptRef.current += event.results[i][0].transcript;
@@ -265,16 +264,14 @@ export default function ConversationPage() {
                   <MessageBubble key={message.id} message={message} />
                 ))}
                 {isTyping && <TypingIndicator />}
-              </div>
                 {showReflectiveWindow && (
-                  <div className="flex justify-center">
-                      <ReflectiveWindow onClose={() => setShowReflectiveWindow(false)} />
-                  </div>
+                    <ReflectiveWindow onClose={() => setShowReflectiveWindow(false)} />
                 )}
+              </div>
             </ScrollArea>
             <div className="p-4 border-t bg-card">
              <div className="max-w-4xl mx-auto w-full">
-              <form onSubmit={handleSubmit} ref={formRef} className="flex items-end gap-2">
+              <form onSubmit={handleSubmit} className="flex items-end gap-2">
                 <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={toggleRecording} type="button">
                   {isRecording ? <MicOff className="w-5 h-5 text-destructive" /> : <Mic className="w-5 h-5" />}
                 </Button>
