@@ -38,6 +38,57 @@
         "goals": {
           "type": "string",
           "description": "User's learning goals."
+        },
+        "stats": {
+          "type": "object",
+          "description": "User's progress statistics for the dashboard.",
+          "properties": {
+            "sessions": {
+              "type": "object",
+              "properties": {
+                "total": { "type": "number" },
+                "change": { "type": "number" }
+              }
+            },
+            "averageSessionLength": {
+              "type": "object",
+              "properties": {
+                "minutes": { "type": "number" },
+                "seconds": { "type": "number" },
+                "change": { "type": "number" }
+              }
+            },
+            "journalEntries": {
+              "type": "object",
+              "properties": {
+                "total": { "type": "number" },
+                "change": { "type": "number" }
+              }
+            },
+            "confidence": {
+              "type": "number"
+            },
+            "fluency": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "week": { "type": "string" },
+                  "wpm": { "type": "number" }
+                }
+              }
+            },
+            "lexicalRichness": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "date": { "type": "string" },
+                  "uniqueWords": { "type": "number" }
+                }
+              }
+            }
+          }
         }
       },
       "required": [

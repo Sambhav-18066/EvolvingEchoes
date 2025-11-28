@@ -1,3 +1,5 @@
+"use client";
+
 import { Header } from "@/components/header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { ConfidenceMeter } from "@/components/dashboard/confidence-meter";
@@ -5,8 +7,39 @@ import { FluencyChart } from "@/components/dashboard/fluency-chart";
 import { IdentityTimeline } from "@/components/dashboard/identity-timeline";
 import { LexicalRichnessChart } from "@/components/dashboard/lexical-richness-chart";
 import { BookOpen, Calendar, Repeat } from "lucide-react";
+import { useUser, useDoc, useMemoFirebase } from "@/firebase";
+import { doc, getFirestore } from "firebase/firestore";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function DashboardPage() {
+  const { user, isUserLoading } = useUser();
+  const db = getFirestore();
+
+  const userProfileRef = useMemoFirebase(() => {
+    if (!user) return null;
+    return doc(db, "users", user.uid);
+  }, [db, user]);
+
+  const { data: userProfile, isLoading: isProfileLoading } = useDoc(userProfileRef);
+
+  const stats = userProfile?.stats;
+
+  const formatChange = (change?: number) => {
+    if (change === undefined) return "";
+    if (change > 0) return `+${change} from last month`;
+    if (change < 0) return `${change} from last month`;
+    return "No change from last month";
+  }
+
+  const formatPercentageChange = (change?: number) => {
+    if (change === undefined) return "";
+    if (change > 0) return `+${change}% from last month`;
+    if (change < 0) return `${change}% from last month`;
+    return "No change from last month";
+  };
+  
+  const isLoading = isUserLoading || isProfileLoading;
+
   return (
     <div className="flex flex-col min-h-screen bg-background">
       <Header isLoggedIn={true} />
@@ -20,7 +53,7 @@ export default function DashboardPage() {
                 <CardDescription>Your WPM over the last 8 weeks.</CardDescription>
               </CardHeader>
               <CardContent className="pl-2">
-                <FluencyChart />
+                <FluencyChart data={stats?.fluency} isLoading={isLoading} />
               </CardContent>
             </Card>
 
@@ -31,7 +64,7 @@ export default function DashboardPage() {
                   <CardDescription>Your self-rated confidence level.</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <ConfidenceMeter />
+                  <ConfidenceMeter value={stats?.confidence} isLoading={isLoading} />
                 </CardContent>
               </Card>
               <Card>
@@ -40,7 +73,7 @@ export default function DashboardPage() {
                   <CardDescription>Unique words used per session.</CardDescription>
                 </CardHeader>
                 <CardContent className="pt-2">
-                  <LexicalRichnessChart />
+                  <LexicalRichnessChart data={stats?.lexicalRichness} isLoading={isLoading} />
                 </CardContent>
               </Card>
             </div>
@@ -61,8 +94,8 @@ export default function DashboardPage() {
                 <Calendar className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">32</div>
-                <p className="text-xs text-muted-foreground">+4 from last month</p>
+                {isLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{stats?.sessions?.total ?? 0}</div>}
+                {isLoading ? <Skeleton className="h-4 w-3/4 mt-1" /> : <p className="text-xs text-muted-foreground">{formatChange(stats?.sessions?.change)}</p>}
               </CardContent>
             </Card>
 
@@ -72,8 +105,8 @@ export default function DashboardPage() {
                 <Repeat className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">12m 45s</div>
-                <p className="text-xs text-muted-foreground">+12% from last month</p>
+                {isLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{stats?.averageSessionLength?.minutes ?? 0}m {stats?.averageSessionLength?.seconds ?? 0}s</div>}
+                {isLoading ? <Skeleton className="h-4 w-3/4 mt-1" /> : <p className="text-xs text-muted-foreground">{formatPercentageChange(stats?.averageSessionLength?.change)}</p>}
               </CardContent>
             </Card>
 
@@ -83,8 +116,8 @@ export default function DashboardPage() {
                 <BookOpen className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold">8</div>
-                <p className="text-xs text-muted-foreground">+2 this month</p>
+                {isLoading ? <Skeleton className="h-8 w-1/2" /> : <div className="text-2xl font-bold">{stats?.journalEntries?.total ?? 0}</div>}
+                {isLoading ? <Skeleton className="h-4 w-3/4 mt-1" /> : <p className="text-xs text-muted-foreground">{formatChange(stats?.journalEntries?.change)}</p>}
               </CardContent>
             </Card>
           </div>

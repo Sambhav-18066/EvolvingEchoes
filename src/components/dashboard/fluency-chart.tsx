@@ -2,8 +2,9 @@
 
 import { Line, LineChart, CartesianGrid, XAxis, Tooltip, ResponsiveContainer } from "recharts"
 import { ChartTooltipContent, ChartContainer, ChartConfig } from "@/components/ui/chart"
+import { Skeleton } from "../ui/skeleton";
 
-const chartData = [
+const defaultData = [
   { week: "Week 1", wpm: 25 },
   { week: "Week 2", wpm: 28 },
   { week: "Week 3", wpm: 27 },
@@ -12,7 +13,7 @@ const chartData = [
   { week: "Week 6", wpm: 38 },
   { week: "Week 7", wpm: 42 },
   { week: "Week 8", wpm: 45 },
-]
+];
 
 const chartConfig = {
   wpm: {
@@ -21,11 +22,20 @@ const chartConfig = {
   },
 } satisfies ChartConfig
 
-export function FluencyChart() {
+interface FluencyChartProps {
+  data?: { week: string; wpm: number }[];
+  isLoading?: boolean;
+}
+
+export function FluencyChart({ data = defaultData, isLoading }: FluencyChartProps) {
+  if (isLoading) {
+    return <Skeleton className="h-[250px] w-full" />;
+  }
+  
   return (
     <ChartContainer config={chartConfig} className="h-[250px] w-full">
       <ResponsiveContainer>
-        <LineChart data={chartData} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
+        <LineChart data={data} margin={{ top: 5, right: 20, left: -10, bottom: 5 }}>
           <CartesianGrid strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="week"

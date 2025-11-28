@@ -8,13 +8,25 @@ import {
   ChartTooltip,
   ChartTooltipContent,
 } from "@/components/ui/chart"
+import { Skeleton } from "../ui/skeleton"
 
-const chartData = [
-  { name: "Filled", value: 75, fill: "hsl(var(--accent))" },
-  { name: "Empty", value: 25, fill: "hsl(var(--muted))" },
-]
+interface ConfidenceMeterProps {
+  value?: number;
+  isLoading?: boolean;
+}
 
-export function ConfidenceMeter() {
+const defaultValue = 75;
+
+export function ConfidenceMeter({ value = defaultValue, isLoading }: ConfidenceMeterProps) {
+  const chartData = [
+    { name: "Filled", value: value, fill: "hsl(var(--accent))" },
+    { name: "Empty", value: 100 - value, fill: "hsl(var(--muted))" },
+  ]
+
+  if (isLoading) {
+    return <Skeleton className="h-[150px] w-[150px] rounded-full mx-auto" />
+  }
+
   return (
     <ChartContainer
       config={{}}
