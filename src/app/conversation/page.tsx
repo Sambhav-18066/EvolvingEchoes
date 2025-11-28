@@ -25,10 +25,10 @@ import { doc, getDoc, updateDoc, increment, arrayUnion } from "firebase/firestor
 const aiAvatar = PlaceHolderImages.find(p => p.id === 'ai-avatar-1');
 const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar-1');
 
-const modeDetails: Record<string, { name: string; icon: React.ReactNode }> = {
-  [InteractionMode.AGENTIC]: { name: 'Agentic AI Mode', icon: <Sparkles className="w-4 h-4" /> },
-  [InteractionMode.NON_AGENTIC]: { name: 'Non-Agentic AI Mode', icon: <BrainCircuit className="w-4 h-4" /> },
-  [InteractionMode.PEER]: { name: 'Peer Mode', icon: <Users className="w-4 h-4" /> }
+const modeDetails: Record<string, { name: string; icon: React.ReactNode, initialMessage: string }> = {
+  [InteractionMode.AGENTIC]: { name: 'Agentic AI Mode', icon: <Sparkles className="w-4 h-4" />, initialMessage: "Hello! I see you've chosen Agentic AI Mode. I'm ready to listen. What's on your mind today?" },
+  [InteractionMode.NON_AGENTIC]: { name: 'Non-Agentic AI Mode', icon: <BrainCircuit className="w-4 h-4" />, initialMessage: "Hello! You've selected Non-Agentic AI Mode. Ask me anything." },
+  [InteractionMode.PEER]: { name: 'Peer Mode', icon: <Users className="w-4 h-4" />, initialMessage: "Hey! I'm in Peer Mode. Ready to practice our conversation skills together? What should we talk about?" }
 };
 
 // @ts-ignore
@@ -213,7 +213,7 @@ export default function ConversationPage() {
     }
     const initialMessage = {
       id: '1',
-      text: `Hello! I see you've chosen ${modeDetails[mode].name}. I'm ready to listen. What's on your mind today?`,
+      text: modeDetails[mode].initialMessage,
       speaker: 'ai',
       timestamp: Date.now(),
       mood: 'calm',
@@ -254,7 +254,7 @@ export default function ConversationPage() {
     recognition.onend = () => {
         setIsRecording(false);
         if(!stopByUser.current){
-            // Do not automatically send, just finalize the input
+             // Just finalize the input, do not auto-send
         }
     };
     

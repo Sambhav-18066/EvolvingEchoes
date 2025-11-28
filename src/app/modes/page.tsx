@@ -41,13 +41,12 @@ export default function ModesPage() {
             />
             <ModeCard
               title="Peer Mode"
-              description="Practice your conversation skills in a real-time text chat with another learner. (Coming Soon)"
+              description="Practice your conversation skills in a real-time text chat with an AI acting as another learner."
               icon={<Users className="text-orange-500" />}
               image={peerImage}
-              href="#"
-              className="border-orange-300 hover:border-orange-500 opacity-60"
+              href="/conversation?mode=peer"
+              className="border-orange-300 hover:border-orange-500"
               gradient="from-orange-100 to-amber-200/10"
-              disabled
             />
           </div>
         </div>
@@ -69,7 +68,7 @@ interface ModeCardProps {
 
 function ModeCard({ title, description, icon, image, href, className, gradient, disabled = false }: ModeCardProps) {
   return (
-    <Card className={`overflow-hidden transition-all duration-300 ease-in-out transform hover:-translate-y-2 hover:shadow-2xl flex flex-col group ${className}`}>
+    <Card className={`overflow-hidden transition-all duration-300 ease-in-out transform hover:-translate-y-2 hover:shadow-2xl flex flex-col group ${className} ${disabled ? 'opacity-60 cursor-not-allowed' : ''}`}>
       <CardHeader className="p-0 relative h-40">
         {image && <Image src={image.imageUrl} alt={title} layout="fill" objectFit="cover" className="group-hover:scale-105 transition-transform duration-500" data-ai-hint={image.imageHint} />}
         <div className={`absolute inset-0 bg-gradient-to-t ${gradient} `}></div>
@@ -83,7 +82,7 @@ function ModeCard({ title, description, icon, image, href, className, gradient, 
       </CardContent>
       <CardFooter className="p-6 pt-0">
         <Button asChild className="w-full" disabled={disabled}>
-          <Link href={href}>Select Mode</Link>
+          <Link href={href}>{disabled ? 'Coming Soon' : 'Select Mode'}</Link>
         </Button>
       </CardFooter>
     </Card>
