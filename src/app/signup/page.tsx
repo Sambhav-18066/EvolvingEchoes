@@ -10,7 +10,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth, useUser, setDocumentNonBlocking } from "@/firebase";
 import { doc, getFirestore } from 'firebase/firestore';
-import { GoogleAuthProvider, signInWithPopup, createUserWithEmailAndPassword, User } from "firebase/auth";
+import { GoogleAuthProvider, signInWithPopup, createUserWithEmailAndPassword, User, sendEmailVerification } from "firebase/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 
@@ -70,6 +70,9 @@ export default function SignupPage() {
     
     const validatePassword = (password: string) => {
         const errors = [];
+        if (password.length < 8) {
+            errors.push("at least 8 characters");
+        }
         if (!/(?=.*[a-z])/.test(password)) {
             errors.push("a lowercase character");
         }
@@ -81,9 +84,6 @@ export default function SignupPage() {
         }
         if (!/(?=.*[\W_])/.test(password)) {
             errors.push("a special character");
-        }
-        if (password.length < 8) {
-            errors.push("at least 8 characters");
         }
 
         if (errors.length > 0) {
@@ -101,8 +101,9 @@ export default function SignupPage() {
 
         try {
             const result = await createUserWithEmailAndPassword(auth, email, password);
+            await sendEmailVerification(result.user);
             createUserProfile(result.user);
-            router.push('/home');
+            router.push(`/verify-email?email=${email}`);
         } catch (error: any) {
             toast({
                 variant: "destructive",
