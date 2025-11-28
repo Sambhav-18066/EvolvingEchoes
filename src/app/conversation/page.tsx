@@ -44,14 +44,11 @@ export default function ConversationPage() {
   
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef<any>(null);
+  const stopByUser = useRef(false);
   const { toast } = useToast();
 
   const handleSendMessage = useCallback(async (text: string) => {
     if (!text.trim()) return;
-
-    if (recognitionRef.current && isRecording) {
-      recognitionRef.current.stop();
-    }
     
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -100,7 +97,7 @@ export default function ConversationPage() {
     } finally {
       setIsTyping(false);
     }
-  }, [isRecording, messages, mode]);
+  }, [messages, mode]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -128,6 +125,7 @@ export default function ConversationPage() {
   
    useEffect(() => {
     if (!SpeechRecognition) {
+      console.warn("Speech recognition not supported by this browser.");
       return;
     }
 
@@ -140,40 +138,41 @@ export default function ConversationPage() {
 
     recognition.onstart = () => {
       setIsRecording(true);
+      stopByUser.current = false;
     };
 
     recognition.onend = () => {
       setIsRecording(false);
+      if (!stopByUser.current) {
+        // If recognition stops unexpectedly, restart it.
+        setTimeout(() => recognition.start(), 100);
+      }
     };
     
     recognition.onerror = (event: any) => {
       if (event.error === 'no-speech' || event.error === 'aborted') {
         return;
       }
-      console.error("Speech recognition error", event.error);
+      console.error("Speech recognition error:", event.error);
       toast({
         variant: "destructive",
         title: "Speech Recognition Error",
         description: `An error occurred: ${event.error}. Please ensure you've granted microphone permissions.`,
       });
     };
-
+    
+    let finalTranscript = '';
     recognition.onresult = (event: any) => {
-      let interim_transcript = '';
-      let final_transcript = '';
-
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
+      let interimTranscript = '';
+      finalTranscript = ''; // Reset final transcript to process full result set
+      for (let i = 0; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
-          final_transcript += event.results[i][0].transcript;
+          finalTranscript += event.results[i][0].transcript;
         } else {
-          interim_transcript += event.results[i][0].transcript;
+          interimTranscript += event.results[i][0].transcript;
         }
       }
-      
-      setInput(final_transcript + interim_transcript);
-      if (final_transcript.trim()) {
-        handleSendMessage(final_transcript);
-      }
+      setInput(finalTranscript + interimTranscript);
     };
 
     return () => {
@@ -181,7 +180,7 @@ export default function ConversationPage() {
         recognitionRef.current.stop();
       }
     };
-  }, [toast, handleSendMessage]);
+  }, [toast]);
 
 
   const toggleRecording = () => {
@@ -195,6 +194,7 @@ export default function ConversationPage() {
     }
 
     if (isRecording) {
+      stopByUser.current = true;
       recognitionRef.current.stop();
     } else {
       try {
