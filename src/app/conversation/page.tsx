@@ -9,13 +9,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { InteractionMode, Message } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { BrainCircuit, Mic, Send, Sparkles, Users, MicOff } from "lucide-react";
+import { BrainCircuit, Mic, Send, Sparkles, Users, MicOff, Volume2 } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { generateConversationalResponse } from "@/ai/flows/generate-conversational-response";
 import { generateReflection } from "@/ai/flows/generate-reflection";
+import { generateAudio } from "@/ai/flows/generate-audio";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useMemoFirebase } from "@/firebase";
@@ -45,6 +46,7 @@ export default function ConversationPage() {
   const [showReflectiveWindow, setShowReflectiveWindow] = useState(false);
   const [reflectionText, setReflectionText] = useState("");
   const viewportRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef<any>(null);
@@ -130,7 +132,25 @@ export default function ConversationPage() {
         timestamp: Date.now(),
         mood: aiResult.mood,
       };
+
+      try {
+        const audioResult = await generateAudio(aiResult.response);
+        aiResponse.audioUrl = audioResult.audio;
+      } catch (audioError) {
+        console.error("Error generating audio:", audioError);
+        toast({
+            variant: "destructive",
+            title: "Audio Error",
+            description: "Could not generate audio for the AI response.",
+        });
+      }
+      
       setMessages(prev => [...prev, aiResponse]);
+
+      if (aiResponse.audioUrl && audioRef.current) {
+        audioRef.current.src = aiResponse.audioUrl;
+        audioRef.current.play().catch(e => console.error("Audio playback failed:", e));
+      }
 
       if (userMessagesCount > 0 && userMessagesCount % 5 === 0) {
         const reflectionResult = await generateReflection({ history: history.concat([{speaker: 'ai', text: aiResult.response}]) });
@@ -152,11 +172,18 @@ export default function ConversationPage() {
     } finally {
       setIsTyping(false);
     }
-  }, [messages, mode]);
+  }, [messages, mode, toast]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     handleSendMessage(input);
+  }
+
+  const playAudio = (audioUrl: string) => {
+    if (audioRef.current) {
+      audioRef.current.src = audioUrl;
+      audioRef.current.play().catch(e => console.error("Audio playback failed:", e));
+    }
   }
 
   useEffect(() => {
@@ -301,7 +328,7 @@ export default function ConversationPage() {
             <ScrollArea className="flex-1 p-6" viewportRef={viewportRef}>
               <div className="space-y-6 max-w-4xl mx-auto w-full">
                 {messages.map((message) => (
-                  <MessageBubble key={message.id} message={message} />
+                  <MessageBubble key={message.id} message={message} onPlayAudio={playAudio} />
                 ))}
                 {isTyping && <TypingIndicator />}
                  {showReflectiveWindow && (
@@ -349,11 +376,12 @@ export default function ConversationPage() {
             </div>
           </div>
         </main>
+        <audio ref={audioRef} className="hidden" />
     </div>
   );
 }
 
-const MessageBubble = ({ message }: { message: Message }) => {
+const MessageBubble = ({ message, onPlayAudio }: { message: Message, onPlayAudio: (url: string) => void }) => {
   const isUser = message.speaker === 'user';
   return (
     <div className={cn("flex items-end gap-3 w-full", isUser ? "ml-auto flex-row-reverse justify-end" : "mr-auto justify-start")}>
@@ -363,10 +391,15 @@ const MessageBubble = ({ message }: { message: Message }) => {
       </Avatar>
       <div className={cn("flex flex-col gap-1", isUser ? "items-end" : "items-start")}>
         <div className={cn(
-          "p-3 rounded-2xl shadow-md max-w-lg",
+          "p-3 rounded-2xl shadow-md max-w-lg flex items-center gap-2",
           isUser ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-card text-card-foreground rounded-bl-sm"
         )}>
           <p className="text-base">{message.text}</p>
+          {!isUser && message.audioUrl && (
+            <Button variant="ghost" size="icon" className="w-6 h-6 shrink-0" onClick={() => onPlayAudio(message.audioUrl!)}>
+                <Volume2 className="w-4 h-4" />
+            </Button>
+          )}
         </div>
         {isUser && message.feedback && (
           <div className="flex gap-2 justify-end">

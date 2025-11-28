@@ -4,6 +4,7 @@ export type Message = {
   text: string;
   speaker: 'user' | 'ai';
   timestamp: number;
+  audioUrl?: string;
   feedback?: {
     clarity?: number;
     lexicalRichness?: number;
