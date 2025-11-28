@@ -42,7 +42,7 @@ export default function ConversationPage() {
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
-  const [isTyping, setIsTyping] = useState(isTyping);
+  const [isTyping, setIsTyping] = useState(false);
   const [showReflectiveWindow, setShowReflectiveWindow] = useState(false);
   const [reflectionText, setReflectionText] = useState("");
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -254,7 +254,7 @@ export default function ConversationPage() {
     recognition.onend = () => {
         setIsRecording(false);
         if(!stopByUser.current){
-            handleSendMessage(input);
+            // Do not automatically send, just finalize the input
         }
     };
     
@@ -291,7 +291,7 @@ export default function ConversationPage() {
         window.speechSynthesis.cancel();
       }
     };
-  }, [toast, handleSendMessage, input]);
+  }, [toast]);
 
 
   const toggleRecording = () => {
