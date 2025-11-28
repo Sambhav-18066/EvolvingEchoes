@@ -17,7 +17,6 @@ import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { generateConversationalResponse } from "@/ai/flows/generate-conversational-response";
 import { generateReflection } from "@/ai/flows/generate-reflection";
-import { generateAudio } from "@/ai/flows/generate-audio";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useUser, useFirestore, useMemoFirebase } from "@/firebase";
@@ -47,7 +46,6 @@ export default function ConversationPage() {
   const [showReflectiveWindow, setShowReflectiveWindow] = useState(false);
   const [reflectionText, setReflectionText] = useState("");
   const viewportRef = useRef<HTMLDivElement>(null);
-  const audioRef = useRef<HTMLAudioElement>(null);
   
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef<any>(null);
@@ -57,6 +55,31 @@ export default function ConversationPage() {
   // Refs to track session stats
   const sessionStartTime = useRef(Date.now());
   const userWordCount = useRef(0);
+
+  const speak = useCallback((text: string) => {
+    if (typeof window === 'undefined' || !window.speechSynthesis) {
+      console.warn('Speech synthesis not supported by this browser.');
+      return;
+    }
+    const utterance = new SpeechSynthesisUtterance(text);
+    
+    // Find a female voice
+    const voices = window.speechSynthesis.getVoices();
+    const femaleVoice = voices.find(voice => voice.name.includes('Female') || voice.gender === 'female');
+    
+    if (femaleVoice) {
+      utterance.voice = femaleVoice;
+    } else {
+        // Fallback if no specific female voice is found
+        const defaultVoice = voices.find(voice => voice.lang.startsWith('en'));
+        if (defaultVoice) utterance.voice = defaultVoice;
+    }
+
+    utterance.pitch = 1;
+    utterance.rate = 1;
+    utterance.volume = 1;
+    window.speechSynthesis.speak(utterance);
+  }, []);
 
   const updateStats = useCallback(async () => {
     if (!user || !db) return;
@@ -133,21 +156,9 @@ export default function ConversationPage() {
         timestamp: Date.now(),
         mood: aiResult.mood,
       };
-
-      try {
-        const audioResult = await generateAudio(aiResult.response);
-        aiResponse.audioUrl = audioResult.audio;
-      } catch (audioError) {
-        console.error("Error generating audio:", audioError);
-        // Fail silently if audio generation fails, e.g. due to rate limits
-      }
       
       setMessages(prev => [...prev, aiResponse]);
-
-      if (aiResponse.audioUrl && audioRef.current) {
-        audioRef.current.src = aiResponse.audioUrl;
-        audioRef.current.play().catch(e => console.error("Audio playback failed:", e));
-      }
+      speak(aiResponse.text);
 
       if (userMessagesCount > 0 && userMessagesCount % 5 === 0) {
         const reflectionResult = await generateReflection({ history: history.concat([{speaker: 'ai', text: aiResult.response}]) });
@@ -169,31 +180,30 @@ export default function ConversationPage() {
     } finally {
       setIsTyping(false);
     }
-  }, [messages, mode, toast]);
+  }, [messages, mode, speak]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     handleSendMessage(input);
   }
 
-  const playAudio = (audioUrl: string) => {
-    if (audioRef.current) {
-      audioRef.current.src = audioUrl;
-      audioRef.current.play().catch(e => console.error("Audio playback failed:", e));
-    }
-  }
-
   useEffect(() => {
-    setMessages([{
+    // Pre-load voices
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.getVoices();
+    }
+    const initialMessage = {
       id: '1',
       text: `Hello! I see you've chosen ${modeDetails[mode].name}. I'm ready to listen. What's on your mind today?`,
       speaker: 'ai',
       timestamp: Date.now(),
       mood: 'calm',
-    }]);
+    };
+    setMessages([initialMessage]);
+    speak(initialMessage.text);
     sessionStartTime.current = Date.now();
     userWordCount.current = 0;
-  }, [mode]);
+  }, [mode, speak]);
 
   useEffect(() => {
     if (viewportRef.current) {
@@ -261,6 +271,9 @@ export default function ConversationPage() {
       if (recognitionRef.current) {
         recognitionRef.current.stop();
       }
+      if (typeof window !== 'undefined' && window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+      }
     };
   }, [toast, handleSendMessage]);
 
@@ -325,7 +338,7 @@ export default function ConversationPage() {
             <ScrollArea className="flex-1 p-6" viewportRef={viewportRef}>
               <div className="space-y-6 max-w-4xl mx-auto w-full">
                 {messages.map((message) => (
-                  <MessageBubble key={message.id} message={message} onPlayAudio={playAudio} />
+                  <MessageBubble key={message.id} message={message} onPlayAudio={() => speak(message.text)} />
                 ))}
                 {isTyping && <TypingIndicator />}
                  {showReflectiveWindow && (
@@ -373,12 +386,11 @@ export default function ConversationPage() {
             </div>
           </div>
         </main>
-        <audio ref={audioRef} className="hidden" />
     </div>
   );
 }
 
-const MessageBubble = ({ message, onPlayAudio }: { message: Message, onPlayAudio: (url: string) => void }) => {
+const MessageBubble = ({ message, onPlayAudio }: { message: Message, onPlayAudio: (text: string) => void }) => {
   const isUser = message.speaker === 'user';
   return (
     <div className={cn("flex items-end gap-3 w-full", isUser ? "ml-auto flex-row-reverse justify-end" : "mr-auto justify-start")}>
@@ -392,8 +404,8 @@ const MessageBubble = ({ message, onPlayAudio }: { message: Message, onPlayAudio
           isUser ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-card text-card-foreground rounded-bl-sm"
         )}>
           <p className="text-base">{message.text}</p>
-          {!isUser && message.audioUrl && (
-            <Button variant="ghost" size="icon" className="w-6 h-6 shrink-0" onClick={() => onPlayAudio(message.audioUrl!)}>
+          {!isUser && (
+            <Button variant="ghost" size="icon" className="w-6 h-6 shrink-0" onClick={() => onPlayAudio(message.text)}>
                 <Volume2 className="w-4 h-4" />
             </Button>
           )}
