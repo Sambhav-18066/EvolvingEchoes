@@ -1,3 +1,6 @@
+
+'use client';
+
 import { Header } from "@/components/header";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -5,9 +8,24 @@ import { Card, CardContent } from "@/components/ui/card";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { BookOpen, LineChart, MessageSquare } from "lucide-react";
 import Link from "next/link";
+import { useUser, useDoc, useMemoFirebase } from "@/firebase";
+import { doc, getFirestore } from "firebase/firestore";
+import { Skeleton } from "@/components/ui/skeleton";
 
 export default function HomePage() {
   const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar-1');
+  const { user, isUserLoading } = useUser();
+  const db = getFirestore();
+
+  const userProfileRef = useMemoFirebase(() => {
+    if (!user) return null;
+    return doc(db, "users", user.uid);
+  }, [db, user]);
+
+  const { data: userProfile, isLoading: isProfileLoading } = useDoc(userProfileRef);
+
+  const isLoading = isUserLoading || isProfileLoading;
+  const userName = userProfile?.name?.split(' ')[0] || 'User';
 
   return (
     <div className="flex flex-col min-h-screen bg-background">
@@ -18,10 +36,14 @@ export default function HomePage() {
             <div className="absolute inset-0 glow opacity-50"></div>
             <CardContent className="relative z-10 flex flex-col items-center">
               <Avatar className="w-24 h-24 mb-4 border-4 border-background shadow-lg">
-                {userAvatar && <AvatarImage src={userAvatar.imageUrl} alt="Sambhav" data-ai-hint={userAvatar.imageHint} />}
-                <AvatarFallback>S</AvatarFallback>
+                {userAvatar && <AvatarImage src={userAvatar.imageUrl} alt={userProfile?.name} data-ai-hint={userAvatar.imageHint} />}
+                <AvatarFallback>{userName.charAt(0)}</AvatarFallback>
               </Avatar>
-              <h1 className="text-3xl font-bold font-headline mt-2">Hello, Sambhav.</h1>
+              {isLoading ? (
+                <Skeleton className="h-9 w-48 mt-2" />
+              ) : (
+                <h1 className="text-3xl font-bold font-headline mt-2">Hello, {userName}.</h1>
+              )}
               <p className="text-muted-foreground mt-2 text-lg">Ready to explore your story?</p>
 
               <div className="w-full flex flex-col gap-4 mt-8">

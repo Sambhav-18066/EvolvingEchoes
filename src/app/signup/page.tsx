@@ -1,3 +1,4 @@
+
 "use client";
 
 import { Button } from "@/components/ui/button";
@@ -145,7 +146,7 @@ export default function SignupPage() {
 
                 <div className="grid gap-2">
                     <Label htmlFor="full-name">Full Name</Label>
-                    <Input id="full-name" placeholder="Sambhav" required value={fullName} onChange={(e) => setFullName(e.target.value)} />
+                    <Input id="full-name" placeholder="Your Name" required value={fullName} onChange={(e) => setFullName(e.target.value)} />
                 </div>
                 <div className="grid gap-2">
                     <Label htmlFor="email">Email</Label>
