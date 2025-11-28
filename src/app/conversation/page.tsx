@@ -43,9 +43,8 @@ export default function ConversationPage() {
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef<any>(null);
   const { toast } = useToast();
-  const transcriptRef = useRef('');
+  const finalTranscriptRef = useRef('');
   const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const stopByUser = useRef(false);
 
   const formRef = useRef<HTMLFormElement>(null);
 
@@ -53,7 +52,6 @@ export default function ConversationPage() {
     if (!text.trim()) return;
 
     if (recognitionRef.current && isRecording) {
-      stopByUser.current = true;
       recognitionRef.current.stop();
     }
     
@@ -67,7 +65,7 @@ export default function ConversationPage() {
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInput("");
-    transcriptRef.current = '';
+    finalTranscriptRef.current = '';
     setIsTyping(true);
 
     const userMessagesCount = newMessages.filter(m => m.speaker === 'user').length;
@@ -140,18 +138,13 @@ export default function ConversationPage() {
 
     recognition.onstart = () => {
       setIsRecording(true);
-      stopByUser.current = false;
     };
 
     recognition.onend = () => {
       setIsRecording(false);
-      if (speechTimeoutRef.current) {
-        clearTimeout(speechTimeoutRef.current);
-      }
-      
-      const transcript = transcriptRef.current.trim();
-      if (!stopByUser.current && transcript) {
-        handleSendMessage(transcript);
+      const finalTranscript = finalTranscriptRef.current.trim();
+      if (finalTranscript) {
+          handleSendMessage(finalTranscript);
       }
     };
     
@@ -173,23 +166,19 @@ export default function ConversationPage() {
         clearTimeout(speechTimeoutRef.current);
       }
 
-      let final_transcript = '';
       let interim_transcript = '';
-
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
-          final_transcript += event.results[i][0].transcript;
+          finalTranscriptRef.current += event.results[i][0].transcript;
         } else {
           interim_transcript += event.results[i][0].transcript;
         }
       }
       
-      transcriptRef.current = final_transcript || transcriptRef.current;
-      setInput(transcriptRef.current + interim_transcript);
+      setInput(finalTranscriptRef.current + interim_transcript);
 
       speechTimeoutRef.current = setTimeout(() => {
         if (recognitionRef.current) {
-            stopByUser.current = false;
             recognitionRef.current.stop();
         }
       }, 2000); 
@@ -209,7 +198,6 @@ export default function ConversationPage() {
         clearTimeout(speechTimeoutRef.current);
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [toast, handleSendMessage]);
 
 
@@ -224,11 +212,11 @@ export default function ConversationPage() {
     }
 
     if (isRecording) {
-      stopByUser.current = true;
+      if (speechTimeoutRef.current) clearTimeout(speechTimeoutRef.current);
       recognitionRef.current.stop();
     } else {
       try {
-        transcriptRef.current = '';
+        finalTranscriptRef.current = '';
         setInput('');
         recognitionRef.current.start();
       } catch (e) {
@@ -278,9 +266,9 @@ export default function ConversationPage() {
                 ))}
                 {isTyping && <TypingIndicator />}
                 {showReflectiveWindow && (
-                    <div className="flex justify-center">
-                        <ReflectiveWindow onClose={() => setShowReflectiveWindow(false)} />
-                    </div>
+                  <div className="flex justify-center">
+                      <ReflectiveWindow onClose={() => setShowReflectiveWindow(false)} />
+                  </div>
                 )}
               </div>
             </ScrollArea>
