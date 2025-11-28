@@ -15,6 +15,7 @@ import { useSearchParams } from "next/navigation";
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { generateConversationalResponse } from "@/ai/flows/generate-conversational-response";
+import { generateReflection } from "@/ai/flows/generate-reflection";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 
@@ -38,6 +39,7 @@ export default function ConversationPage() {
   const [input, setInput] = useState("");
   const [isTyping, setIsTyping] = useState(false);
   const [showReflectiveWindow, setShowReflectiveWindow] = useState(false);
+  const [reflectionText, setReflectionText] = useState("");
   const viewportRef = useRef<HTMLDivElement>(null);
   
   const [isRecording, setIsRecording] = useState(false);
@@ -58,14 +60,17 @@ export default function ConversationPage() {
       timestamp: Date.now(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     setInput("");
     setIsTyping(true);
 
-    const userMessagesCount = messages.filter(m => m.speaker === 'user').length + 1;
+    const userMessagesCount = newMessages.filter(m => m.speaker === 'user').length;
     
     try {
-      const aiResult = await generateConversationalResponse({ userInput: text, mode });
+      const history = newMessages.slice(-10).map(({ speaker, text }) => ({ speaker, text }));
+      const aiResult = await generateConversationalResponse({ userInput: text, mode, history });
+
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
         text: aiResult.response,
@@ -76,6 +81,8 @@ export default function ConversationPage() {
       setMessages(prev => [...prev, aiResponse]);
 
       if (userMessagesCount > 0 && userMessagesCount % 5 === 0) {
+        const reflectionResult = await generateReflection({ history });
+        setReflectionText(reflectionResult.reflection);
         setShowReflectiveWindow(true);
       } else {
         setShowReflectiveWindow(false);
@@ -164,6 +171,9 @@ export default function ConversationPage() {
       }
       
       setInput(final_transcript + interim_transcript);
+      if (final_transcript.trim()) {
+        handleSendMessage(final_transcript);
+      }
     };
 
     return () => {
@@ -171,7 +181,7 @@ export default function ConversationPage() {
         recognitionRef.current.stop();
       }
     };
-  }, [toast]);
+  }, [toast, handleSendMessage]);
 
 
   const toggleRecording = () => {
@@ -236,12 +246,15 @@ export default function ConversationPage() {
                   <MessageBubble key={message.id} message={message} />
                 ))}
                 {isTyping && <TypingIndicator />}
+                 {showReflectiveWindow && (
+                    <div className="w-full flex justify-center py-4">
+                      <ReflectiveWindow 
+                        reflection={reflectionText}
+                        onClose={() => setShowReflectiveWindow(false)} 
+                      />
+                    </div>
+                  )}
               </div>
-               {showReflectiveWindow && (
-                  <div className="w-full flex justify-center py-4">
-                    <ReflectiveWindow onClose={() => setShowReflectiveWindow(false)} />
-                  </div>
-                )}
             </ScrollArea>
             <div className="p-4 border-t bg-card">
              <div className="max-w-4xl mx-auto w-full">
@@ -322,7 +335,7 @@ const TypingIndicator = () => (
   </div>
 );
 
-const ReflectiveWindow = ({ onClose }: { onClose: () => void }) => (
+const ReflectiveWindow = ({ reflection, onClose }: { reflection: string, onClose: () => void }) => (
     <div className="w-full max-w-2xl animate-in fade-in-50 slide-in-from-bottom-5 duration-500 my-4">
         <Card className="shadow-lg bg-gradient-to-br from-indigo-100 to-purple-100">
             <CardHeader>
@@ -330,7 +343,7 @@ const ReflectiveWindow = ({ onClose }: { onClose: () => void }) => (
                 <CardDescription>A moment to pause and reflect on our conversation.</CardDescription>
             </CardHeader>
             <CardContent>
-                <p>You spoke about your childhood today. This seems like an important memory. Would you like to explore this more?</p>
+                <p>{reflection || "Thinking..."}</p>
                 <div className="flex gap-2 mt-4">
                     <Button onClick={onClose}>Explore More</Button>
                     <Button variant="ghost" onClick={onClose}>Continue</Button>

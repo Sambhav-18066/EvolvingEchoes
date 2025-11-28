@@ -10,11 +10,17 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
-import {InteractionMode} from '@/lib/types';
+import {InteractionMode, Message} from '@/lib/types';
+
+const MessageSchema = z.object({
+  speaker: z.enum(['user', 'ai']),
+  text: z.string(),
+});
 
 const GenerateConversationalResponseInputSchema = z.object({
-  userInput: z.string().describe("The user's message."),
+  userInput: z.string().describe("The user's current message."),
   mode: z.nativeEnum(InteractionMode).describe('The current conversation mode.'),
+  history: z.array(MessageSchema).describe('The recent conversation history.'),
 });
 export type GenerateConversationalResponseInput = z.infer<
   typeof GenerateConversationalResponseInputSchema
@@ -43,6 +49,11 @@ const prompt = ai.definePrompt({
   - agentic: Be empathic, adaptive, and reflective. Help the user explore their story in depth.
   - non-agentic: Be straightforward and reactive. For simple question-and-answer.
   - peer: Be like a fellow learner. (This mode is not fully implemented).
+
+  Here is the recent conversation history:
+  {{#each history}}
+  - {{speaker}}: {{text}}
+  {{/each}}
 
   The user just said: "{{userInput}}"
 
