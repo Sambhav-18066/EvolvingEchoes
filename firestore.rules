@@ -44,14 +44,6 @@ service cloud.firestore {
     }
 
     /**
-     * Checks for ownership on an existing document. Used for safe updates and deletes.
-     * Ensures the operation targets a document that already exists.
-     */
-    function isExistingOwner(userId) {
-      return isOwner(userId) && exists(/databases/$(database)/documents/users/$(userId));
-    }
-
-    /**
      * Validates that the internal 'id' field of a new profile document
      * correctly matches the user's Auth UID from the path.
      * This enforces relational integrity from the moment of creation.
@@ -66,6 +58,8 @@ service cloud.firestore {
      * It only performs the check if the 'id' field is present in the update request.
      */
     function idIsImmutable() {
+      // If the 'id' field is not in the incoming data, it's a valid update (we're not trying to change it).
+      // If it IS in the incoming data, it must match the existing 'id'.
       return !('id' in request.resource.data) || request.resource.data.id == resource.data.id;
     }
 
@@ -85,8 +79,8 @@ service cloud.firestore {
       allow get: if isOwner(userId);
       allow list: if false;
       allow create: if isOwner(userId) && hasValidProfileDataOnCreate(userId);
-      allow update: if isExistingOwner(userId) && idIsImmutable();
-      allow delete: if isExistingOwner(userId);
+      allow update: if isOwner(userId) && idIsImmutable();
+      allow delete: if isOwner(userId);
     }
   }
 }
