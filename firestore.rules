@@ -79,7 +79,7 @@ service cloud.firestore {
       allow get: if isOwner(userId);
       allow list: if false;
       allow create: if isOwner(userId) && hasValidProfileDataOnCreate(userId);
-      allow update: if isOwner(userId) && idIsImmutable();
+      allow update: if isOwner(userId);
       allow delete: if isOwner(userId);
     }
   }
