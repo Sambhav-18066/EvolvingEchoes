@@ -43,6 +43,7 @@ export default function ConversationPage() {
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef<any>(null);
   const { toast } = useToast();
+  const finalTranscriptRef = useRef('');
 
   useEffect(() => {
     setMessages([{
@@ -75,20 +76,19 @@ export default function ConversationPage() {
 
     recognition.onresult = (event: any) => {
       let interimTranscript = '';
-      let finalTranscript = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
+          finalTranscriptRef.current += event.results[i][0].transcript;
         } else {
           interimTranscript += event.results[i][0].transcript;
         }
       }
-      setInput(prevInput => prevInput + finalTranscript + interimTranscript);
+      setInput(finalTranscriptRef.current + interimTranscript);
     };
 
     recognition.onerror = (event: any) => {
-        if (event.error === 'aborted') {
-            console.log("Speech recognition aborted.");
+        if (event.error === 'aborted' || event.error === 'no-speech') {
+            console.log("Speech recognition aborted or no speech detected.");
             return;
         }
         console.error("Speech recognition error", event.error);
@@ -101,11 +101,11 @@ export default function ConversationPage() {
     };
     
     recognition.onend = () => {
+        // Only restart if we are still in recording state.
         if (recognitionRef.current && isRecording) {
             try {
-                recognition.start(); // Restart if still supposed to be recording
+                recognition.start();
             } catch (e) {
-                // This might happen if the component unmounts quickly
                 console.log("Could not restart recognition", e);
             }
         }
@@ -115,6 +115,7 @@ export default function ConversationPage() {
 
     return () => {
       if (recognitionRef.current) {
+        recognitionRef.current.onend = null; // Prevent onend from firing on unmount
         recognitionRef.current.stop();
         recognitionRef.current = null;
       }
@@ -137,6 +138,7 @@ export default function ConversationPage() {
     setMessages(newMessages);
     const currentInput = input;
     setInput("");
+    finalTranscriptRef.current = '';
     setIsTyping(true);
 
     const userMessagesCount = newMessages.filter(m => m.speaker === 'user').length;
@@ -186,9 +188,10 @@ export default function ConversationPage() {
       setIsRecording(false);
     } else {
       try {
+        finalTranscriptRef.current = ''; // Reset transcript
+        setInput(''); // Clear input on new recording
         recognitionRef.current.start();
         setIsRecording(true);
-        setInput(''); // Clear input on new recording
       } catch (e) {
          console.error("Could not start recognition", e);
          toast({
