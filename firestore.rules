@@ -48,7 +48,7 @@ service cloud.firestore {
      * Ensures the operation targets a document that already exists.
      */
     function isExistingOwner(userId) {
-      return isOwner(userId) && resource != null;
+      return isOwner(userId) && exists(/databases/$(database)/documents/users/$(userId));
     }
 
     /**
@@ -63,9 +63,10 @@ service cloud.firestore {
     /**
      * Enforces immutability of the internal 'id' field during an update.
      * This prevents the core ownership link of the document from being changed.
+     * It only performs the check if the 'id' field is present in the update request.
      */
-    function hasValidProfileDataOnUpdate() {
-      return request.resource.data.id == resource.data.id;
+    function idIsImmutable() {
+      return !('id' in request.resource.data) || request.resource.data.id == resource.data.id;
     }
 
     // ------------------------------------------------------------------------
@@ -84,7 +85,7 @@ service cloud.firestore {
       allow get: if isOwner(userId);
       allow list: if false;
       allow create: if isOwner(userId) && hasValidProfileDataOnCreate(userId);
-      allow update: if isExistingOwner(userId) && hasValidProfileDataOnUpdate();
+      allow update: if isExistingOwner(userId) && idIsImmutable();
       allow delete: if isExistingOwner(userId);
     }
   }
