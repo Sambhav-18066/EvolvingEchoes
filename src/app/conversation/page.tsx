@@ -43,11 +43,7 @@ export default function ConversationPage() {
   const [isRecording, setIsRecording] = useState(false);
   const recognitionRef = useRef<any>(null);
   const { toast } = useToast();
-  const finalTranscriptRef = useRef('');
-  
-  // Ref to manage if the recording should be intentionally stopped vs. stopped by the API
-  const intentionalStopRef = useRef(false);
-  // Ref to hold the timeout for sending message automatically
+  const transcriptRef = useRef('');
   const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const formRef = useRef<HTMLFormElement>(null);
@@ -55,12 +51,10 @@ export default function ConversationPage() {
   const handleSendMessage = useCallback(async (text: string) => {
     if (!text.trim()) return;
 
-    if (isRecording) {
-      intentionalStopRef.current = true;
-      recognitionRef.current?.stop();
-      setIsRecording(false);
+    if (recognitionRef.current && isRecording) {
+      recognitionRef.current.stop();
     }
-
+    
     const userMessage: Message = {
       id: Date.now().toString(),
       text: text,
@@ -71,7 +65,7 @@ export default function ConversationPage() {
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInput("");
-    finalTranscriptRef.current = '';
+    transcriptRef.current = '';
     setIsTyping(true);
 
     const userMessagesCount = newMessages.filter(m => m.speaker === 'user').length;
@@ -131,8 +125,9 @@ export default function ConversationPage() {
     }
   }, [messages, isTyping]);
   
-  useEffect(() => {
+   useEffect(() => {
     if (!SpeechRecognition) {
+      console.warn("Speech recognition not supported in this browser.");
       return;
     }
 
@@ -141,100 +136,102 @@ export default function ConversationPage() {
     recognition.interimResults = true;
     recognition.lang = 'en-US';
 
+    recognition.onstart = () => {
+      setIsRecording(true);
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+      // The 'end' event can be triggered by stop() or by the API itself.
+      // We only want to auto-send if the API stops it after a pause,
+      // not when we programmatically call stop().
+      if (transcriptRef.current.trim()) {
+        handleSendMessage(transcriptRef.current.trim());
+      }
+    };
+    
+    recognition.onerror = (event: any) => {
+      if (event.error === 'no-speech' || event.error === 'aborted') {
+        // These are not critical errors, so we can ignore them.
+        return;
+      }
+      console.error("Speech recognition error", event.error);
+      toast({
+        variant: "destructive",
+        title: "Speech Recognition Error",
+        description: `An error occurred: ${event.error}. Please ensure you've granted microphone permissions.`,
+      });
+    };
+
     recognition.onresult = (event: any) => {
       if (speechTimeoutRef.current) {
         clearTimeout(speechTimeoutRef.current);
       }
 
-      let interimTranscript = '';
+      let final_transcript = '';
+      let interim_transcript = '';
+
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
-          finalTranscriptRef.current += event.results[i][0].transcript + ' ';
+          final_transcript += event.results[i][0].transcript;
         } else {
-          interimTranscript += event.results[i][0].transcript;
+          interim_transcript += event.results[i][0].transcript;
         }
       }
-      setInput(finalTranscriptRef.current + interimTranscript);
+      
+      transcriptRef.current = final_transcript;
+      setInput(transcriptRef.current + interim_transcript);
 
-      // Auto-send after a pause
+      // Set a timeout to stop recognition if the user stops talking.
       speechTimeoutRef.current = setTimeout(() => {
-          if(finalTranscriptRef.current.trim()){
-              handleSendMessage(finalTranscriptRef.current.trim());
-          }
-      }, 2000); // 2-second pause
-    };
-
-    recognition.onerror = (event: any) => {
-        if (event.error === 'aborted' || event.error === 'no-speech') {
-            return;
+        if (isRecording) {
+            recognition.stop();
         }
-        console.error("Speech recognition error", event.error);
-        toast({
-            variant: "destructive",
-            title: "Speech Recognition Error",
-            description: `An error occurred: ${event.error}. Please ensure you've granted microphone permissions.`,
-        });
-        setIsRecording(false);
-    };
-    
-    recognition.onend = () => {
-        if (recognitionRef.current && !intentionalStopRef.current) {
-            try {
-                recognition.start(); // Keep listening
-            } catch (e) {
-                console.error("Could not restart recognition", e);
-                setIsRecording(false);
-            }
-        } else {
-            setIsRecording(false);
-        }
+      }, 2000); // 2 seconds of silence
     };
 
     recognitionRef.current = recognition;
 
     return () => {
       if (recognitionRef.current) {
-        intentionalStopRef.current = true; // Ensure it stops on unmount
-        recognitionRef.current.onend = null; 
+        recognitionRef.current.onstart = null;
+        recognitionRef.current.onend = null;
+        recognitionRef.current.onerror = null;
+        recognitionRef.current.onresult = null;
         recognitionRef.current.stop();
-        recognitionRef.current = null;
       }
       if (speechTimeoutRef.current) {
         clearTimeout(speechTimeoutRef.current);
       }
     };
-  }, [toast, handleSendMessage]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toast]);
 
 
   const toggleRecording = () => {
     if (!recognitionRef.current) {
-        toast({
-            variant: "destructive",
-            title: "Browser Not Supported",
-            description: "Your browser does not support speech recognition.",
-        });
-        return;
+      toast({
+        variant: "destructive",
+        title: "Browser Not Supported",
+        description: "Your browser does not support speech recognition.",
+      });
+      return;
     }
 
     if (isRecording) {
-      intentionalStopRef.current = true;
       recognitionRef.current.stop();
-      // onend will set isRecording to false
     } else {
       try {
-        intentionalStopRef.current = false;
-        finalTranscriptRef.current = '';
+        transcriptRef.current = '';
         setInput('');
         recognitionRef.current.start();
-        setIsRecording(true);
       } catch (e) {
-         console.error("Could not start recognition", e);
-         toast({
-            variant: "destructive",
-            title: "Microphone Error",
-            description: "Could not start recording. Please ensure microphone permissions are granted and try again.",
+        console.error("Could not start recognition", e);
+        toast({
+          variant: "destructive",
+          title: "Microphone Error",
+          description: "Could not start recording. Please ensure microphone permissions are granted and try again.",
         });
-        setIsRecording(false);
       }
     }
   };
