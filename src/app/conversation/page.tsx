@@ -76,7 +76,8 @@ export default function ConversationPage() {
 
     recognition.onresult = (event: any) => {
       let interimTranscript = '';
-      for (let i = event.resultIndex; i < event.results.length; ++i) {
+      finalTranscriptRef.current = '';
+      for (let i = 0; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
           finalTranscriptRef.current += event.results[i][0].transcript;
         } else {
@@ -88,7 +89,6 @@ export default function ConversationPage() {
 
     recognition.onerror = (event: any) => {
         if (event.error === 'aborted' || event.error === 'no-speech') {
-            console.log("Speech recognition aborted or no speech detected.");
             return;
         }
         console.error("Speech recognition error", event.error);
@@ -101,12 +101,12 @@ export default function ConversationPage() {
     };
     
     recognition.onend = () => {
-        // Only restart if we are still in recording state.
         if (recognitionRef.current && isRecording) {
             try {
                 recognition.start();
             } catch (e) {
-                console.log("Could not restart recognition", e);
+                console.error("Could not restart recognition", e);
+                setIsRecording(false);
             }
         }
     };
@@ -127,6 +127,10 @@ export default function ConversationPage() {
     e.preventDefault();
     if (!input.trim()) return;
 
+    if (isRecording) {
+        toggleRecording();
+    }
+
     const userMessage: Message = {
       id: Date.now().toString(),
       text: input,
@@ -142,11 +146,6 @@ export default function ConversationPage() {
     setIsTyping(true);
 
     const userMessagesCount = newMessages.filter(m => m.speaker === 'user').length;
-    if (userMessagesCount > 0 && userMessagesCount % 5 === 0) {
-        setShowReflectiveWindow(true);
-    } else {
-        setShowReflectiveWindow(false);
-    }
     
     try {
       const aiResult = await generateConversationalResponse({ userInput: currentInput, mode });
@@ -158,6 +157,12 @@ export default function ConversationPage() {
         mood: aiResult.mood,
       };
       setMessages(prev => [...prev, aiResponse]);
+
+      if (userMessagesCount > 0 && userMessagesCount % 5 === 0) {
+        setShowReflectiveWindow(true);
+      } else {
+        setShowReflectiveWindow(false);
+      }
     } catch (error) {
       console.error("Error generating AI response:", error);
       const errorResponse: Message = {
@@ -338,3 +343,5 @@ const ReflectiveWindow = ({ onClose }: { onClose: () => void }) => (
         </Card>
     </div>
 );
+
+    
