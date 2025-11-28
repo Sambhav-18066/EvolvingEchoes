@@ -12,7 +12,7 @@ import { cn } from "@/lib/utils";
 import { BrainCircuit, Mic, Send, Sparkles, Users, MicOff } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { generateConversationalResponse } from "@/ai/flows/generate-conversational-response";
 import { Badge } from "@/components/ui/badge";
@@ -44,107 +44,32 @@ export default function ConversationPage() {
   const recognitionRef = useRef<any>(null);
   const { toast } = useToast();
   const finalTranscriptRef = useRef('');
-  const stopRecordingRef = useRef(false);
-
-  useEffect(() => {
-    setMessages([{
-      id: '1',
-      text: `Hello! I see you've chosen ${modeDetails[mode].name}. I'm ready to listen. What's on your mind today?`,
-      speaker: 'ai',
-      timestamp: Date.now(),
-      mood: 'calm',
-    }]);
-  }, [mode]);
-
-  useEffect(() => {
-    if (viewportRef.current) {
-      viewportRef.current.scrollTo({
-        top: viewportRef.current.scrollHeight,
-        behavior: 'smooth'
-      });
-    }
-  }, [messages, isTyping, showReflectiveWindow]);
   
-  useEffect(() => {
-    if (!SpeechRecognition) {
-      return;
-    }
+  // Ref to manage if the recording should be intentionally stopped vs. stopped by the API
+  const intentionalStopRef = useRef(false);
+  // Ref to hold the timeout for sending message automatically
+  const speechTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    const recognition = new SpeechRecognition();
-    recognition.continuous = true;
-    recognition.interimResults = true;
-    recognition.lang = 'en-US';
+  const formRef = useRef<HTMLFormElement>(null);
 
-    recognition.onresult = (event: any) => {
-      let interimTranscript = '';
-      let finalTranscript = '';
-      for (let i = 0; i < event.results.length; ++i) {
-        if (event.results[i].isFinal) {
-          finalTranscript += event.results[i][0].transcript;
-        } else {
-          interimTranscript += event.results[i][0].transcript;
-        }
-      }
-      finalTranscriptRef.current = finalTranscript;
-      setInput(finalTranscript + interimTranscript);
-    };
-
-    recognition.onerror = (event: any) => {
-        if (event.error === 'aborted' || event.error === 'no-speech') {
-            return;
-        }
-        console.error("Speech recognition error", event.error);
-        toast({
-            variant: "destructive",
-            title: "Speech Recognition Error",
-            description: `An error occurred: ${event.error}. Please ensure you've granted microphone permissions.`,
-        });
-        setIsRecording(false);
-    };
-    
-    recognition.onend = () => {
-        if (recognitionRef.current && !stopRecordingRef.current) {
-            try {
-                recognition.start();
-            } catch (e) {
-                console.error("Could not restart recognition", e);
-                setIsRecording(false);
-            }
-        } else {
-            setIsRecording(false);
-        }
-    };
-
-    recognitionRef.current = recognition;
-
-    return () => {
-      if (recognitionRef.current) {
-        recognitionRef.current.onend = null; // Prevent onend from firing on unmount
-        recognitionRef.current.stop();
-        recognitionRef.current = null;
-      }
-    };
-  }, [toast]);
-
-
-  const handleSendMessage = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!input.trim()) return;
+  const handleSendMessage = useCallback(async (text: string) => {
+    if (!text.trim()) return;
 
     if (isRecording) {
-        toggleRecording();
+      intentionalStopRef.current = true;
+      recognitionRef.current?.stop();
+      setIsRecording(false);
     }
 
     const userMessage: Message = {
       id: Date.now().toString(),
-      text: input,
+      text: text,
       speaker: 'user',
       timestamp: Date.now(),
     };
 
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
-    const currentInput = input;
     setInput("");
     finalTranscriptRef.current = '';
     setIsTyping(true);
@@ -152,7 +77,7 @@ export default function ConversationPage() {
     const userMessagesCount = newMessages.filter(m => m.speaker === 'user').length;
     
     try {
-      const aiResult = await generateConversationalResponse({ userInput: currentInput, mode });
+      const aiResult = await generateConversationalResponse({ userInput: text, mode });
       const aiResponse: Message = {
         id: (Date.now() + 1).toString(),
         text: aiResult.response,
@@ -180,7 +105,106 @@ export default function ConversationPage() {
     } finally {
       setIsTyping(false);
     }
-  };
+  }, [isRecording, messages, mode]);
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    handleSendMessage(input);
+  }
+
+  useEffect(() => {
+    setMessages([{
+      id: '1',
+      text: `Hello! I see you've chosen ${modeDetails[mode].name}. I'm ready to listen. What's on your mind today?`,
+      speaker: 'ai',
+      timestamp: Date.now(),
+      mood: 'calm',
+    }]);
+  }, [mode]);
+
+  useEffect(() => {
+    if (viewportRef.current) {
+      viewportRef.current.scrollTo({
+        top: viewportRef.current.scrollHeight,
+        behavior: 'smooth'
+      });
+    }
+  }, [messages, isTyping]);
+  
+  useEffect(() => {
+    if (!SpeechRecognition) {
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event: any) => {
+      if (speechTimeoutRef.current) {
+        clearTimeout(speechTimeoutRef.current);
+      }
+
+      let interimTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscriptRef.current += event.results[i][0].transcript + ' ';
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+      setInput(finalTranscriptRef.current + interimTranscript);
+
+      // Auto-send after a pause
+      speechTimeoutRef.current = setTimeout(() => {
+          if(finalTranscriptRef.current.trim()){
+              handleSendMessage(finalTranscriptRef.current.trim());
+          }
+      }, 2000); // 2-second pause
+    };
+
+    recognition.onerror = (event: any) => {
+        if (event.error === 'aborted' || event.error === 'no-speech') {
+            return;
+        }
+        console.error("Speech recognition error", event.error);
+        toast({
+            variant: "destructive",
+            title: "Speech Recognition Error",
+            description: `An error occurred: ${event.error}. Please ensure you've granted microphone permissions.`,
+        });
+        setIsRecording(false);
+    };
+    
+    recognition.onend = () => {
+        if (recognitionRef.current && !intentionalStopRef.current) {
+            try {
+                recognition.start(); // Keep listening
+            } catch (e) {
+                console.error("Could not restart recognition", e);
+                setIsRecording(false);
+            }
+        } else {
+            setIsRecording(false);
+        }
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      if (recognitionRef.current) {
+        intentionalStopRef.current = true; // Ensure it stops on unmount
+        recognitionRef.current.onend = null; 
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
+      if (speechTimeoutRef.current) {
+        clearTimeout(speechTimeoutRef.current);
+      }
+    };
+  }, [toast, handleSendMessage]);
+
 
   const toggleRecording = () => {
     if (!recognitionRef.current) {
@@ -193,14 +217,14 @@ export default function ConversationPage() {
     }
 
     if (isRecording) {
-      stopRecordingRef.current = true;
+      intentionalStopRef.current = true;
       recognitionRef.current.stop();
-      // isRecording will be set to false in onend
+      // onend will set isRecording to false
     } else {
       try {
-        stopRecordingRef.current = false;
-        finalTranscriptRef.current = ''; // Reset transcript
-        setInput(''); // Clear input on new recording
+        intentionalStopRef.current = false;
+        finalTranscriptRef.current = '';
+        setInput('');
         recognitionRef.current.start();
         setIsRecording(true);
       } catch (e) {
@@ -233,8 +257,8 @@ export default function ConversationPage() {
                <div>
                  <h2 className="font-semibold">{modeDetails[mode].name}</h2>
                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                   <span className="w-2 h-2 rounded-full bg-green-500"></span>
-                   AI is feeling {messages[messages.length-1]?.mood || 'calm'}
+                   <span className={cn("w-2 h-2 rounded-full", isTyping ? "bg-yellow-500 animate-pulse" : "bg-green-500")}></span>
+                   {isTyping ? "AI is thinking..." : `AI is feeling ${messages[messages.length - 1]?.mood || 'calm'}`}
                  </p>
                </div>
              </div>
@@ -250,12 +274,16 @@ export default function ConversationPage() {
                   <MessageBubble key={message.id} message={message} />
                 ))}
                 {isTyping && <TypingIndicator />}
-                {showReflectiveWindow && <ReflectiveWindow onClose={() => setShowReflectiveWindow(false)} />}
+                {showReflectiveWindow && (
+                    <div className="flex justify-center">
+                        <ReflectiveWindow onClose={() => setShowReflectiveWindow(false)} />
+                    </div>
+                )}
               </div>
             </ScrollArea>
             <div className="p-4 border-t bg-card">
              <div className="max-w-4xl mx-auto w-full">
-              <form onSubmit={handleSendMessage} className="flex items-end gap-2">
+              <form onSubmit={handleSubmit} ref={formRef} className="flex items-end gap-2">
                 <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={toggleRecording} type="button">
                   {isRecording ? <MicOff className="w-5 h-5 text-destructive" /> : <Mic className="w-5 h-5" />}
                 </Button>
@@ -333,7 +361,7 @@ const TypingIndicator = () => (
 );
 
 const ReflectiveWindow = ({ onClose }: { onClose: () => void }) => (
-    <div className="w-full animate-in fade-in-50 slide-in-from-bottom-5 duration-500 my-4">
+    <div className="w-full max-w-2xl animate-in fade-in-50 slide-in-from-bottom-5 duration-500 my-4">
         <Card className="shadow-lg bg-gradient-to-br from-indigo-100 to-purple-100">
             <CardHeader>
                 <CardTitle className="flex items-center gap-2"><Sparkles className="text-accent" /> Reflective Window</CardTitle>
