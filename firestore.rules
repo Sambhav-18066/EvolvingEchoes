@@ -1,3 +1,4 @@
+
 /**
  * @file firestore.rules
  * @description Firestore Security Rules for a user-centric application.
@@ -79,8 +80,10 @@ service cloud.firestore {
       allow get: if isOwner(userId);
       allow list: if false;
       allow create: if isOwner(userId) && hasValidProfileDataOnCreate(userId);
-      allow update: if isOwner(userId);
+      allow update: if isOwner(userId) && idIsImmutable();
       allow delete: if isOwner(userId);
     }
   }
 }
+
+    

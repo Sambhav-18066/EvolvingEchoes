@@ -19,8 +19,8 @@ import { generateConversationalResponse } from "@/ai/flows/generate-conversation
 import { generateReflection } from "@/ai/flows/generate-reflection";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { useUser, useFirestore, useMemoFirebase, errorEmitter, FirestorePermissionError } from "@/firebase";
-import { doc, getDoc, updateDoc, increment, arrayUnion } from "firebase/firestore";
+import { useUser, useFirestore, errorEmitter, FirestorePermissionError, setDocumentNonBlocking } from "@/firebase";
+import { doc, updateDoc, increment, arrayUnion } from "firebase/firestore";
 
 const aiAvatar = PlaceHolderImages.find(p => p.id === 'ai-avatar-1');
 const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar-1');
@@ -91,25 +91,33 @@ export default function ConversationPage() {
     const userProfileRef = doc(db, "users", user.uid);
   
     try {
-      const userProfileSnap = await getDoc(userProfileRef);
-      const currentStats = userProfileSnap.data()?.stats || {};
+      // Ensure the document exists before trying to update it.
+      // This creates the doc with default stats if it's the user's first session.
+      const initialStats = {
+        stats: {
+          sessions: { total: 0, change: 0 },
+          averageSessionLength: { minutes: 0, seconds: 0, change: 0 },
+          journalEntries: { total: 0, change: 0 },
+          confidence: 75,
+          fluency: [],
+          lexicalRichness: [],
+        }
+      };
+      setDocumentNonBlocking(userProfileRef, initialStats, { merge: true });
   
-      const newAvgLength = ((currentStats.averageSessionLength?.minutes || 0) * (currentStats.sessions?.total || 0) + sessionDurationMinutes) / ((currentStats.sessions?.total || 0) + 1);
-  
-      const uniqueWords = new Set(messages.filter(m => m.speaker === 'user').map(m => m.text).join(' ').split(/\s+/)).size;
+      const uniqueWords = new Set(messages.filter(m => m.speaker === 'user').map(m => m.text).join(' ').split(/\s+/).filter(Boolean)).size;
   
       const updatePayload = {
         'stats.sessions.total': increment(1),
-        'stats.averageSessionLength.minutes': Math.floor(newAvgLength),
-        'stats.averageSessionLength.seconds': Math.round((newAvgLength * 60) % 60),
+        'stats.averageSessionLength.minutes': increment(sessionDurationMinutes),
         'stats.lexicalRichness': arrayUnion({
           date: new Date().toISOString().split('T')[0],
           uniqueWords: uniqueWords,
         }),
       };
   
-      // Use non-blocking update with proper error handling
-      updateDoc(userProfileRef, updatePayload, { merge: true })
+      // Now, perform the update on the (now guaranteed to exist) document
+      updateDoc(userProfileRef, updatePayload)
         .catch(async (serverError) => {
           const permissionError = new FirestorePermissionError({
             path: userProfileRef.path,
@@ -120,11 +128,10 @@ export default function ConversationPage() {
         });
   
     } catch (error: any) {
-      // This will catch errors from getDoc, but not from the non-blocking updateDoc
-      console.error("Error fetching user profile for stats update:", error);
+       console.error("Error setting up stats update:", error);
        const permissionError = new FirestorePermissionError({
           path: userProfileRef.path,
-          operation: 'get',
+          operation: 'write',
       });
       errorEmitter.emit('permission-error', permissionError);
     }
@@ -141,7 +148,8 @@ export default function ConversationPage() {
         window.speechSynthesis.cancel();
       }
     };
-  }, [user, messages.length, updateStats]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, messages.length]);
 
 
   const handleSendMessage = useCallback(async (text: string) => {
@@ -209,7 +217,13 @@ export default function ConversationPage() {
   useEffect(() => {
     // Pre-load voices
     if (typeof window !== 'undefined' && window.speechSynthesis) {
-        window.speechSynthesis.getVoices();
+        // This is often necessary to get the full list of voices.
+        const poller = setInterval(() => {
+            const voices = window.speechSynthesis.getVoices();
+            if (voices.length) {
+                clearInterval(poller);
+            }
+        }, 100);
     }
     const initialMessage = {
       id: '1',
@@ -253,13 +267,12 @@ export default function ConversationPage() {
 
     recognition.onend = () => {
         setIsRecording(false);
-        if(!stopByUser.current){
-             // Just finalize the input, do not auto-send
-        }
+        // Do not automatically send on end. User must click send.
     };
     
     recognition.onerror = (event: any) => {
       if (event.error === 'no-speech' || event.error === 'aborted') {
+        // These are normal occurrences, don't show a scary error.
         return;
       }
       console.error("Speech recognition error:", event.error);
@@ -280,7 +293,9 @@ export default function ConversationPage() {
           interimTranscript += event.results[i][0].transcript;
         }
       }
-      setInput(finalTranscript.trim() || interimTranscript);
+      // Set the input to the most recent stable (final) transcript,
+      // with the ongoing (interim) transcript appended.
+      setInput(finalTranscript.trim() + interimTranscript);
     };
 
     return () => {
@@ -468,5 +483,7 @@ const ReflectiveWindow = ({ reflection, onClose }: { reflection: string, onClose
         </Card>
     </div>
 );
+
+    
 
     
