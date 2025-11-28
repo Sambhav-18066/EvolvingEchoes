@@ -28,7 +28,7 @@ const modeDetails: Record<string, { name: string; icon: React.ReactNode }> = {
 };
 
 // @ts-ignore
-const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+const SpeechRecognition = typeof window !== 'undefined' && (window.SpeechRecognition || window.webkitSpeechRecognition);
 
 export default function ConversationPage() {
   const searchParams = useSearchParams();
@@ -65,7 +65,6 @@ export default function ConversationPage() {
   
   useEffect(() => {
     if (!SpeechRecognition) {
-      // You could show a message to the user that their browser doesn't support Speech Recognition.
       return;
     }
 
@@ -84,10 +83,14 @@ export default function ConversationPage() {
           interimTranscript += event.results[i][0].transcript;
         }
       }
-      setInput(input + finalTranscript + interimTranscript);
+      setInput(prevInput => prevInput + finalTranscript + interimTranscript);
     };
 
     recognition.onerror = (event: any) => {
+        if (event.error === 'aborted') {
+            console.log("Speech recognition aborted.");
+            return;
+        }
         console.error("Speech recognition error", event.error);
         toast({
             variant: "destructive",
@@ -98,17 +101,25 @@ export default function ConversationPage() {
     };
     
     recognition.onend = () => {
-      if (isRecording) {
-        recognition.start(); // Restart if still supposed to be recording
-      }
+        if (recognitionRef.current && isRecording) {
+            try {
+                recognition.start(); // Restart if still supposed to be recording
+            } catch (e) {
+                // This might happen if the component unmounts quickly
+                console.log("Could not restart recognition", e);
+            }
+        }
     };
 
     recognitionRef.current = recognition;
 
     return () => {
-      recognition.stop();
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+        recognitionRef.current = null;
+      }
     };
-  }, [input, isRecording, toast]);
+  }, [isRecording, toast]);
 
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -122,12 +133,13 @@ export default function ConversationPage() {
       timestamp: Date.now(),
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    const newMessages = [...messages, userMessage];
+    setMessages(newMessages);
     const currentInput = input;
     setInput("");
     setIsTyping(true);
 
-    const userMessagesCount = [...messages, userMessage].filter(m => m.speaker === 'user').length;
+    const userMessagesCount = newMessages.filter(m => m.speaker === 'user').length;
     if (userMessagesCount > 0 && userMessagesCount % 5 === 0) {
         setShowReflectiveWindow(true);
     } else {
@@ -168,6 +180,7 @@ export default function ConversationPage() {
         });
         return;
     }
+
     if (isRecording) {
       recognitionRef.current.stop();
       setIsRecording(false);
@@ -175,6 +188,7 @@ export default function ConversationPage() {
       try {
         recognitionRef.current.start();
         setIsRecording(true);
+        setInput(''); // Clear input on new recording
       } catch (e) {
          console.error("Could not start recognition", e);
          toast({
@@ -182,6 +196,7 @@ export default function ConversationPage() {
             title: "Microphone Error",
             description: "Could not start recording. Please ensure microphone permissions are granted and try again.",
         });
+        setIsRecording(false);
       }
     }
   };
@@ -190,8 +205,9 @@ export default function ConversationPage() {
   return (
     <div className="flex flex-col h-screen bg-background">
       <Header isLoggedIn={true} />
-      <main className="flex-1 flex flex-col pt-20 overflow-hidden p-4 gap-4">
-          <div className="flex items-center justify-between p-2 rounded-lg bg-card border flex-shrink-0">
+      <main className="flex-1 flex flex-col pt-20 overflow-hidden">
+        <div className="flex-shrink-0 border-b p-4">
+           <div className="flex items-center justify-between p-2 rounded-lg bg-card border">
              <div className="flex items-center gap-3">
                <Avatar className="h-10 w-10 relative">
                  {aiAvatar && <AvatarImage src={aiAvatar.imageUrl} data-ai-hint={aiAvatar.imageHint} />}
@@ -211,10 +227,11 @@ export default function ConversationPage() {
              <Button variant="ghost" asChild>
                 <Link href="/modes">Change Mode</Link>
              </Button>
-          </div>
-          <Card className="flex-1 flex flex-col overflow-hidden">
+           </div>
+        </div>
+          <div className="flex-1 flex flex-col overflow-hidden bg-muted/20">
             <ScrollArea className="flex-1 p-6" viewportRef={viewportRef}>
-              <div className="space-y-6">
+              <div className="space-y-6 max-w-4xl mx-auto w-full">
                 {messages.map((message) => (
                   <MessageBubble key={message.id} message={message} />
                 ))}
@@ -223,6 +240,7 @@ export default function ConversationPage() {
               </div>
             </ScrollArea>
             <div className="p-4 border-t bg-card">
+             <div className="max-w-4xl mx-auto w-full">
               <form onSubmit={handleSendMessage} className="flex items-end gap-2">
                 <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={toggleRecording} type="button">
                   {isRecording ? <MicOff className="w-5 h-5 text-destructive" /> : <Mic className="w-5 h-5" />}
@@ -252,8 +270,9 @@ export default function ConversationPage() {
                   <Send className="w-5 h-5" />
                 </Button>
               </form>
+             </div>
             </div>
-          </Card>
+          </div>
         </main>
     </div>
   );
@@ -262,15 +281,15 @@ export default function ConversationPage() {
 const MessageBubble = ({ message }: { message: Message }) => {
   const isUser = message.speaker === 'user';
   return (
-    <div className={cn("flex items-end gap-3 w-full max-w-xl", isUser ? "ml-auto flex-row-reverse" : "mr-auto")}>
+    <div className={cn("flex items-end gap-3 w-full", isUser ? "ml-auto flex-row-reverse justify-end" : "mr-auto justify-start")}>
       <Avatar className="h-8 w-8">
         <AvatarImage src={isUser ? userAvatar?.imageUrl : aiAvatar?.imageUrl} />
         <AvatarFallback>{isUser ? 'S' : 'AI'}</AvatarFallback>
       </Avatar>
-      <div className="flex flex-col gap-1">
+      <div className={cn("flex flex-col gap-1", isUser ? "items-end" : "items-start")}>
         <div className={cn(
-          "p-3 rounded-2xl shadow-md",
-          isUser ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-secondary text-secondary-foreground rounded-bl-sm"
+          "p-3 rounded-2xl shadow-md max-w-lg",
+          isUser ? "bg-primary text-primary-foreground rounded-br-sm" : "bg-card text-card-foreground rounded-bl-sm"
         )}>
           <p className="text-base">{message.text}</p>
         </div>
