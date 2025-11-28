@@ -9,13 +9,14 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { InteractionMode, Message } from "@/lib/types";
 import { cn } from "@/lib/utils";
-import { BrainCircuit, Mic, Send, Sparkles, Users } from "lucide-react";
+import { BrainCircuit, Mic, Send, Sparkles, Users, MicOff } from "lucide-react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import React, { useState, useEffect, useRef } from "react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { generateConversationalResponse } from "@/ai/flows/generate-conversational-response";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 
 const aiAvatar = PlaceHolderImages.find(p => p.id === 'ai-avatar-1');
 const userAvatar = PlaceHolderImages.find(p => p.id === 'user-avatar-1');
@@ -26,6 +27,9 @@ const modeDetails: Record<string, { name: string; icon: React.ReactNode }> = {
   [InteractionMode.PEER]: { name: 'Peer Mode', icon: <Users className="w-4 h-4" /> }
 };
 
+// @ts-ignore
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
 export default function ConversationPage() {
   const searchParams = useSearchParams();
   const mode = (searchParams.get("mode") as InteractionMode) || InteractionMode.AGENTIC;
@@ -35,6 +39,10 @@ export default function ConversationPage() {
   const [isTyping, setIsTyping] = useState(false);
   const [showReflectiveWindow, setShowReflectiveWindow] = useState(false);
   const viewportRef = useRef<HTMLDivElement>(null);
+  
+  const [isRecording, setIsRecording] = useState(false);
+  const recognitionRef = useRef<any>(null);
+  const { toast } = useToast();
 
   useEffect(() => {
     setMessages([{
@@ -54,6 +62,54 @@ export default function ConversationPage() {
       });
     }
   }, [messages, isTyping, showReflectiveWindow]);
+  
+  useEffect(() => {
+    if (!SpeechRecognition) {
+      // You could show a message to the user that their browser doesn't support Speech Recognition.
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    recognition.onresult = (event: any) => {
+      let interimTranscript = '';
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        } else {
+          interimTranscript += event.results[i][0].transcript;
+        }
+      }
+      setInput(input + finalTranscript + interimTranscript);
+    };
+
+    recognition.onerror = (event: any) => {
+        console.error("Speech recognition error", event.error);
+        toast({
+            variant: "destructive",
+            title: "Speech Recognition Error",
+            description: `An error occurred: ${event.error}. Please ensure you've granted microphone permissions.`,
+        });
+        setIsRecording(false);
+    };
+    
+    recognition.onend = () => {
+      if (isRecording) {
+        recognition.start(); // Restart if still supposed to be recording
+      }
+    };
+
+    recognitionRef.current = recognition;
+
+    return () => {
+      recognition.stop();
+    };
+  }, [input, isRecording, toast]);
+
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -103,6 +159,34 @@ export default function ConversationPage() {
     }
   };
 
+  const toggleRecording = () => {
+    if (!recognitionRef.current) {
+        toast({
+            variant: "destructive",
+            title: "Browser Not Supported",
+            description: "Your browser does not support speech recognition.",
+        });
+        return;
+    }
+    if (isRecording) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+    } else {
+      try {
+        recognitionRef.current.start();
+        setIsRecording(true);
+      } catch (e) {
+         console.error("Could not start recognition", e);
+         toast({
+            variant: "destructive",
+            title: "Microphone Error",
+            description: "Could not start recording. Please ensure microphone permissions are granted and try again.",
+        });
+      }
+    }
+  };
+
+
   return (
     <div className="flex flex-col h-screen bg-background">
       <Header isLoggedIn={true} />
@@ -140,8 +224,8 @@ export default function ConversationPage() {
             </ScrollArea>
             <div className="p-4 border-t bg-card">
               <form onSubmit={handleSendMessage} className="flex items-end gap-2">
-                <Button variant="ghost" size="icon" className="flex-shrink-0">
-                  <Mic className="w-5 h-5" />
+                <Button variant="ghost" size="icon" className="flex-shrink-0" onClick={toggleRecording} type="button">
+                  {isRecording ? <MicOff className="w-5 h-5 text-destructive" /> : <Mic className="w-5 h-5" />}
                 </Button>
                 <div className="flex-1 relative">
                   <Input
