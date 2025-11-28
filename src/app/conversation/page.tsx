@@ -44,6 +44,7 @@ export default function ConversationPage() {
   const recognitionRef = useRef<any>(null);
   const { toast } = useToast();
   const finalTranscriptRef = useRef('');
+  const stopRecordingRef = useRef(false);
 
   useEffect(() => {
     setMessages([{
@@ -76,15 +77,16 @@ export default function ConversationPage() {
 
     recognition.onresult = (event: any) => {
       let interimTranscript = '';
-      finalTranscriptRef.current = '';
+      let finalTranscript = '';
       for (let i = 0; i < event.results.length; ++i) {
         if (event.results[i].isFinal) {
-          finalTranscriptRef.current += event.results[i][0].transcript;
+          finalTranscript += event.results[i][0].transcript;
         } else {
           interimTranscript += event.results[i][0].transcript;
         }
       }
-      setInput(finalTranscriptRef.current + interimTranscript);
+      finalTranscriptRef.current = finalTranscript;
+      setInput(finalTranscript + interimTranscript);
     };
 
     recognition.onerror = (event: any) => {
@@ -101,13 +103,15 @@ export default function ConversationPage() {
     };
     
     recognition.onend = () => {
-        if (recognitionRef.current && isRecording) {
+        if (recognitionRef.current && !stopRecordingRef.current) {
             try {
                 recognition.start();
             } catch (e) {
                 console.error("Could not restart recognition", e);
                 setIsRecording(false);
             }
+        } else {
+            setIsRecording(false);
         }
     };
 
@@ -120,7 +124,7 @@ export default function ConversationPage() {
         recognitionRef.current = null;
       }
     };
-  }, [isRecording, toast]);
+  }, [toast]);
 
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -189,10 +193,12 @@ export default function ConversationPage() {
     }
 
     if (isRecording) {
+      stopRecordingRef.current = true;
       recognitionRef.current.stop();
-      setIsRecording(false);
+      // isRecording will be set to false in onend
     } else {
       try {
+        stopRecordingRef.current = false;
         finalTranscriptRef.current = ''; // Reset transcript
         setInput(''); // Clear input on new recording
         recognitionRef.current.start();
@@ -343,5 +349,3 @@ const ReflectiveWindow = ({ onClose }: { onClose: () => void }) => (
         </Card>
     </div>
 );
-
-    
